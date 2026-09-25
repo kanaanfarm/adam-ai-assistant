@@ -1,9 +1,10 @@
 # Adam on Render Free: temporary owner test
 
-This is the full Adam v8.4.1.15.1 application with an HTTP Basic owner gate.
-Every route is protected, including APIs and webhooks. Set a unique random
-password of at least 20 characters as the secret `ADAM_OWNER_PASSWORD`; the
-server refuses requests until it is set. Browser sign-in name: `adam`.
+This is the full Adam v8.4.1.15.1 application with an owner login page.
+The page includes a Show password checkbox. Every route is protected, including
+APIs and webhooks. Set a unique password of at least 20 characters as the
+secret `ADAM_OWNER_PASSWORD`; the server refuses requests until it is set.
+Browser sign-in name: `adam`.
 
 Use a private GitHub repository containing these extracted files. Do not add
 your existing `data`, `.env`, tokens, API keys, or passwords to GitHub. Connect
