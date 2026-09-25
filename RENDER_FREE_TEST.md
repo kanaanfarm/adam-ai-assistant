@@ -2,7 +2,7 @@
 
 This is the full Adam v8.4.1.15.1 application with an HTTP Basic owner gate.
 Every route is protected, including APIs and webhooks. Set a unique random
-password of at least 10 characters as the secret `ADAM_OWNER_PASSWORD`; the
+password of at least 20 characters as the secret `ADAM_OWNER_PASSWORD`; the
 server refuses requests until it is set. Browser sign-in name: `adam`.
 
 Use a private GitHub repository containing these extracted files. Do not add
