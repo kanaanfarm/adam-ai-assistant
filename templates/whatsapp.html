@@ -1,0 +1,268 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WhatsApp Business</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#172033;--muted:#697386;--line:#dce2ea;--dark:#111827;--good:#067647;--bad:#b42318;--warn:#b54708}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1050px;margin:26px auto;padding:0 18px}
+.header,.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 5px 18px rgba(17,24,39,.04)}
+.header{padding:20px 22px;margin-bottom:16px}.card{padding:20px 22px;margin-bottom:16px}
+h1{margin:0 0 7px;font-size:28px}h2{margin:0 0 15px;font-size:19px}
+.small{font-size:13px;color:var(--muted);line-height:1.45}
+.actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+button,a.btn{padding:10px 13px;border:1px solid #c8ced8;border-radius:8px;background:#fff;color:var(--text);text-decoration:none;cursor:pointer;font-weight:600}
+button.primary{background:var(--dark);color:#fff;border-color:var(--dark)}
+button:disabled{opacity:.55}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.full{grid-column:1/-1}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+input,textarea{width:100%;padding:10px 12px;border:1px solid #cbd2dc;border-radius:8px;font:inherit}
+textarea{min-height:120px;resize:vertical}
+.status{padding:11px 13px;border-radius:8px;margin-top:10px;display:none}
+.status.good{display:block;background:#ecfdf3;color:var(--good);border:1px solid #abefc6;font-weight:700}
+.status.bad{display:block;background:#fef3f2;color:var(--bad);border:1px solid #fecdca;font-weight:700}
+.status.warn{display:block;background:#fffaeb;color:var(--warn);border:1px solid #fedf89;font-weight:700}
+.summary{background:#f8fafc;border:1px solid #e3e8ef;border-radius:10px;padding:13px;line-height:1.6}
+.checkbox{display:flex;gap:8px;align-items:center;font-size:14px}.checkbox input{width:auto}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>WhatsApp Business</h1>
+    <div class="small">Official WhatsApp Cloud API integration. The assistant never sends a message without your approval.</div>
+    <div class="actions" style="margin-top:14px">
+      <a class="btn" href="/">← Back to Assistant</a>
+      <a class="btn" href="/contacts">Contacts</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. WhatsApp Cloud API Connection</h2>
+    <div class="summary">
+      Status:
+      <b id="connStatus" style="color:{{ '#067647' if status.configured else '#b54708' }}">
+        {{ 'Configured' if status.configured else 'Not configured' }}
+      </b><br>
+      <span class="small">Use credentials from your Meta WhatsApp Business / Cloud API setup. Your WhatsApp password is never used.</span>
+    </div>
+
+    <div class="grid" style="margin-top:14px">
+      <div>
+        <label>Phone Number ID</label>
+        <input id="phoneNumberId" value="{{ status.phone_number_id }}" placeholder="Meta Phone Number ID">
+      </div>
+      <div>
+        <label>WhatsApp Business Account ID (optional)</label>
+        <input id="businessId" value="{{ status.business_account_id }}" placeholder="WABA ID">
+      </div>
+      <div>
+        <label>Graph API Version</label>
+        <input id="apiVersion" value="{{ status.api_version or 'v21.0' }}">
+      </div>
+      <div>
+        <label>Access Token</label>
+        <input id="accessToken" type="password" placeholder="{{ 'Saved — leave blank to keep it' if status.token_saved else 'Meta access token' }}">
+      </div>
+      <div class="full">
+        <label>Webhook Verify Token (private value you choose)</label>
+        <input id="verifyToken" type="password" placeholder="{{ 'Saved — leave blank to keep it' if status.verify_token_saved else 'Enter a long private verification token' }}">
+      </div>
+      <div class="full">
+        <label>Meta App Secret (recommended for secure incoming webhooks)</label>
+        <input id="appSecret" type="password" placeholder="{{ 'Saved — leave blank to keep it' if status.app_secret_saved else 'Meta App Dashboard → App settings → Basic' }}">
+      </div>
+    </div>
+    <div class="actions" style="margin-top:12px">
+      <button class="primary" id="saveConfig">Save WhatsApp Settings</button>
+      <button id="testConfig">Test Connection</button>
+    </div>
+    <div id="configStatus" class="status"></div>
+    <div class="summary" style="margin-top:13px">
+      <b>Webhook callback path:</b> <code>/webhooks/whatsapp</code><br>
+      <span class="small">Meta requires a public HTTPS address. Localhost cannot receive Meta webhook calls directly.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Incoming WhatsApp Messages</h2>
+    <div class="actions" style="margin-bottom:12px">
+      <button id="refreshInbox">Refresh Inbox</button>
+      <span class="small">Updates automatically every 5 seconds when a public webhook is connected.</span>
+    </div>
+    <div id="whatsappInbox" class="summary">No incoming messages received yet.</div>
+  </div>
+
+  <div class="card">
+    <h2>3. Prepare WhatsApp Message</h2>
+    <label>Instruction</label>
+    <textarea id="instruction" placeholder="Example: Send Buyer Test a WhatsApp message asking him to provide the 4.5 kW split A/C quotation."></textarea>
+    <div class="actions">
+      <button class="primary" id="prepareBtn">Prepare Message</button>
+      <span id="draftInfo" class="small"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. Review & Send</h2>
+    <div class="grid">
+      <div>
+        <label>Contact</label>
+        <input id="contactName" placeholder="Contact name">
+      </div>
+      <div>
+        <label>WhatsApp Number</label>
+        <input id="phone" placeholder="International format, e.g. 9715XXXXXXXX">
+      </div>
+      <div class="full">
+        <label>Message</label>
+        <textarea id="message"></textarea>
+      </div>
+    </div>
+
+    <div class="summary" style="margin-top:13px">
+      <b>Recipient:</b> <span id="recipientPreview">Not selected</span><br>
+      <b>Channel:</b> WhatsApp Business Cloud API
+    </div>
+
+    <div class="checkbox" style="margin-top:14px">
+      <input id="approve" type="checkbox">
+      <label for="approve" style="margin:0">I approve sending this WhatsApp message now</label>
+    </div>
+
+    <div class="actions" style="margin-top:13px">
+      <button class="primary" id="sendBtn">Send WhatsApp Message</button>
+    </div>
+    <div id="sendStatus" class="status"></div>
+  </div>
+</div>
+
+<script>
+const q=id=>document.getElementById(id);
+let alreadySent=false;
+
+function updatePreview(){
+  const name=q('contactName').value.trim();
+  const phone=q('phone').value.trim();
+  q('recipientPreview').textContent=(name||'Unknown contact')+(phone?' — '+phone:'');
+}
+['contactName','phone','message'].forEach(id=>{
+  q(id).addEventListener('input',()=>{alreadySent=false;updatePreview();});
+});
+
+q('saveConfig').onclick=async()=>{
+  const out=q('configStatus');
+  out.className='status warn';out.textContent='Saving settings…';
+  try{
+    const r=await fetch('/api/whatsapp/config',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        phone_number_id:q('phoneNumberId').value,
+        business_account_id:q('businessId').value,
+        api_version:q('apiVersion').value,
+        access_token:q('accessToken').value
+        ,verify_token:q('verifyToken').value
+        ,app_secret:q('appSecret').value
+      })
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Could not save settings');
+    q('accessToken').value='';
+    q('connStatus').textContent=d.configured?'Configured':'Not configured';
+    q('connStatus').style.color=d.configured?'#067647':'#b54708';
+    out.className='status good';out.textContent='WhatsApp settings saved.';
+  }catch(e){out.className='status bad';out.textContent='Error: '+e.message;}
+};
+
+async function refreshInbox(){
+  const box=q('whatsappInbox');
+  try{
+    const r=await fetch('/api/whatsapp/inbox');
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Could not load inbox');
+    if(!d.messages.length){box.textContent='No incoming messages received yet.';return;}
+    box.innerHTML=d.messages.map(m=>{
+      const who=(m.contact_name||'Unknown')+' — '+(m.from||'');
+      const body=m.text||('['+(m.type||'message')+']');
+      const when=m.received_at_utc||'';
+      return '<div style="padding:10px 0;border-bottom:1px solid #dce2ea">'
+        +'<b>'+escapeHtml(who)+'</b><br>'+escapeHtml(body)
+        +'<br><span class="small">'+escapeHtml(when)+'</span></div>';
+    }).join('');
+  }catch(e){box.textContent='Inbox error: '+e.message;}
+}
+function escapeHtml(v){
+  const d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML;
+}
+q('refreshInbox').onclick=refreshInbox;
+refreshInbox();setInterval(refreshInbox,5000);
+
+q('testConfig').onclick=async()=>{
+  const out=q('configStatus');
+  out.className='status warn';out.textContent='Testing Meta WhatsApp connection…';
+  try{
+    const r=await fetch('/api/whatsapp/test',{method:'POST'});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Connection test failed');
+    out.className='status good';
+    out.textContent='Connected to '+(d.verified_name||'WhatsApp')+(d.display_phone_number?' — '+d.display_phone_number:'')+'.';
+  }catch(e){out.className='status bad';out.textContent='Error: '+e.message;}
+};
+
+q('prepareBtn').onclick=async()=>{
+  const info=q('draftInfo');
+  info.textContent='Preparing professional WhatsApp message…';
+  try{
+    const r=await fetch('/api/whatsapp/draft',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({instruction:q('instruction').value})
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Could not prepare message');
+    q('contactName').value=d.contact_name||'';
+    q('phone').value=d.phone||'';
+    q('message').value=d.message||'';
+    info.textContent=d.contact_name?'Contact found: '+d.contact_name:'Message prepared. Enter recipient number.';
+    alreadySent=false;
+    q('approve').checked=false;
+    updatePreview();
+  }catch(e){info.textContent='Error: '+e.message;}
+};
+
+q('sendBtn').onclick=async()=>{
+  const out=q('sendStatus');
+  if(alreadySent){out.className='status warn';out.textContent='This message was already sent. Edit it before sending again.';return;}
+  if(!q('approve').checked){out.className='status bad';out.textContent='Please approve the message before sending.';return;}
+  const phone=q('phone').value.trim(), msg=q('message').value.trim();
+  if(!phone){out.className='status bad';out.textContent='Recipient WhatsApp number is required.';return;}
+  if(!msg){out.className='status bad';out.textContent='Message text is empty.';return;}
+  if(!confirm('Send this WhatsApp message now to '+phone+'?'))return;
+
+  const btn=q('sendBtn');btn.disabled=true;
+  out.className='status warn';out.textContent='Sending WhatsApp message…';
+  try{
+    const r=await fetch('/api/whatsapp/send',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({approved:true,phone,message:msg})
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Send failed');
+    alreadySent=true;q('approve').checked=false;
+    out.className='status good';
+    out.textContent='✓ WhatsApp message sent successfully.'+(d.message_id?' Message ID: '+d.message_id:'');
+  }catch(e){out.className='status bad';out.textContent='Error: '+e.message;}
+  finally{btn.disabled=false;}
+};
+
+updatePreview();
+</script>
+</body>
+</html>

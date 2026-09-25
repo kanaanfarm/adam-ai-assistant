@@ -1,0 +1,14 @@
+Adam Acquisition v8.4.0 — Verification Summary
+
+New focused autonomous meeting attendance tests: 7/7 PASS
+Preserved affected behavior checks (memory, no-silent-turn, corrections/orders, universal assistant): 14/14 PASS
+Total selected affected checks: 21/21 PASS
+Python compile checks: PASS
+Autonomous Meeting Attendance JavaScript syntax (Node --check): PASS
+Microsoft Graph calendar-read transport self-test: PASS
+
+Important live-platform boundary:
+A production Teams/Zoom/Google Meet join adapter is not yet bound in v8.4.0.
+The scheduler, mission persistence, Outlook calendar discovery, pre-meeting briefing,
+and owner pre-authorization are prepared and operational. Real join remains explicitly
+blocked until a tested live meeting-platform adapter is connected.

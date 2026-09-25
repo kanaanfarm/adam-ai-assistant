@@ -1,0 +1,10 @@
+Adam Acquisition v8.4.1.11.2 verification
+
+Targeted scope: end-turn timestamp accuracy after a completed prior turn.
+
+PASS: 6/6 targeted pytest checks.
+PASS: Python compile.
+PASS: Meeting-page JavaScript syntax.
+PASS: 8/8 static preservation checks for natural-pause guard, fast boundary/span, v8.4.1.11.1 speech timestamp freeze, instant factual voice, session isolation, clarification handling, and owner approval.
+
+No provider transport, STT transport, voice delivery, governance, clarification, or meeting-memory behavior changed.

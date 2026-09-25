@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Translator — {{ app_name }}</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#111827;background:#f3f4f6}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1000px;margin:28px auto;padding:0 18px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:22px;margin-bottom:16px;box-shadow:0 5px 18px rgba(17,24,39,.04)}h1{margin:0 0 6px}label{display:block;font-weight:700;font-size:13px;margin:10px 0 6px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}textarea,select{width:100%;padding:11px;border:1px solid #cbd2dc;border-radius:8px;font:inherit}textarea{min-height:190px;resize:vertical}button,.btn{padding:10px 14px;border:1px solid #c8ced8;border-radius:8px;background:#fff;color:#111827;text-decoration:none;cursor:pointer;font-weight:700}.primary{background:#111827;color:#fff;border-color:#111827}.actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.status{margin-top:12px;padding:10px;border-radius:8px;display:none}.status.good{display:block;background:#ecfdf3;color:#067647}.status.bad{display:block;background:#fef3f2;color:#b42318}.small{color:#6b7280;font-size:13px}@media(max-width:720px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="card"><h1>Translator</h1><div class="small">Translate accurately between English, Arabic, Lebanese Arabic, French and Spanish.</div><div class="actions"><a class="btn" href="/">← Back to Assistant</a></div></div>
+<div class="card">
+  <div class="grid">
+    <div><label>From</label><select id="source"><option>Auto detect</option><option>English</option><option>Arabic</option><option>Lebanese Arabic</option><option>French</option><option>Spanish</option></select></div>
+    <div><label>To</label><select id="target"><option>English</option><option>Arabic</option><option>Lebanese Arabic</option><option>French</option><option>Spanish</option></select></div>
+    <div><label>Original text</label><textarea id="sourceText" placeholder="Type or paste text here"></textarea></div>
+    <div><label>Translation</label><textarea id="result" readonly placeholder="Translation will appear here"></textarea></div>
+  </div>
+  <div class="actions"><button class="primary" id="translateBtn">Translate</button><button id="swapBtn">Swap Languages</button><button id="copyBtn">Copy Translation</button></div>
+  <div id="status" class="status"></div>
+</div></div>
+<script>
+const q=id=>document.getElementById(id);
+q('translateBtn').onclick=async()=>{
+ const out=q('status');out.className='status good';out.textContent='Translating…';q('translateBtn').disabled=true;
+ try{const r=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:q('sourceText').value,source_language:q('source').value,target_language:q('target').value})});const d=await r.json();if(!d.ok)throw new Error(d.error||'Translation failed');q('result').value=d.translation||'';out.className='status good';out.textContent='Translation completed.'}
+ catch(e){out.className='status bad';out.textContent='Error: '+e.message}
+ finally{q('translateBtn').disabled=false}
+};
+q('swapBtn').onclick=()=>{if(q('source').value==='Auto detect')return;const s=q('source').value;q('source').value=q('target').value;q('target').value=s;const t=q('sourceText').value;q('sourceText').value=q('result').value;q('result').value=t};
+q('copyBtn').onclick=async()=>{if(!q('result').value)return;await navigator.clipboard.writeText(q('result').value);q('status').className='status good';q('status').textContent='Translation copied.'};
+</script></body></html>

@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Email</title><style>
+body{font-family:Arial;background:#f3f4f6;margin:0;color:#111827}.wrap{max-width:900px;margin:24px auto;padding:14px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}
+textarea,input,select{width:100%;box-sizing:border-box;padding:10px;margin:5px 0 11px;font:inherit}textarea{min-height:120px}
+button,a{padding:9px 12px;border:1px solid #bbb;border-radius:8px;background:white;color:#111827;text-decoration:none;cursor:pointer;margin:2px}.primary{background:#111827;color:white}.small{font-size:13px;color:#6b7280}.notice{background:#f9fafb;padding:11px;border-radius:9px}</style></head>
+<body><div class="wrap"><div class="card"><h1>Smart Email — Draft & Copy</h1><a href="/">← Back</a> <a href="/contacts">Contacts</a>
+<p class="notice">Include the saved contact's name in your instruction. Smart Email will find the contact and fill the To field automatically.</p></div>
+<div class="card"><textarea id="instruction" placeholder="Tell the assistant what you want to say..."></textarea>
+<select id="language"><option>English</option><option>Arabic</option><option>French</option><option>Spanish</option></select>
+<label>Signature (optional)</label><textarea id="signature" style="min-height:65px" placeholder="Alex Morgan&#10;Operations Manager"></textarea>
+<button class="primary" id="draft">Prepare AI Draft</button><p id="result" class="small"></p>
+<label>To</label><input id="to"><label>CC</label><input id="cc"><label>BCC</label><input id="bcc"><label>Subject</label><input id="subject"><label>Body</label><textarea id="body"></textarea>
+<button id="cs">Copy Subject</button><button id="cb">Copy Body</button><button id="ca">Copy Full Email</button><a href="https://outlook.live.com/mail/" target="_blank" rel="noopener">Open Hotmail / Outlook</a>
+<div style="margin-top:14px;padding:12px;border:1px solid #ddd;border-radius:10px">
+  <b>Real Outlook Send</b><div id="sendSummary" style="margin:10px 0;padding:10px;background:#f9fafb;border-radius:8px"><div><b>From:</b> <span id="senderPreview">{{ sender_label or "Connected Outlook account" }}</span></div><div><b>To:</b> <span id="recipientPreview">Not selected</span></div></div>
+  <p class="small">Requires Microsoft Outlook connection in this standalone app.</p>
+  <label><input type="checkbox" id="approveSend" style="width:auto"> I approve sending this email now</label><br><br>
+  <button class="primary" id="sendReal">Send Email from Outlook</button>
+  <a href="/microsoft">Microsoft Outlook Connection</a>
+  <div id="sendResult" class="small" style="margin-top:8px"></div>
+</div>
+</div></div>
+<script>const q=x=>document.getElementById(x),r=q('result'); let emailAlreadySent=false;q('draft').onclick=async()=>{r.textContent='Preparing…';let x=await fetch('/api/email-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({instruction:q('instruction').value,language:q('language').value,signature:q('signature').value})});let raw=await x.text();let d;try{d=JSON.parse(raw)}catch(_){r.textContent='Error: Server returned HTTP '+x.status+' instead of JSON.';return}if(d.ok){q('to').value=d.to||''; if(q('recipientPreview'))q('recipientPreview').textContent=d.to||'Not selected'; emailAlreadySent=false;q('subject').value=d.subject||'';q('body').value=d.body||'';r.textContent=d.contact_name?'Draft ready. Contact found: '+d.contact_name:'Draft ready. No saved contact name found.'}else r.textContent='Error: '+d.error};
+async function cp(t){await navigator.clipboard.writeText(t);r.textContent='Copied.'}q('cs').onclick=()=>cp(q('subject').value);q('cb').onclick=()=>cp(q('body').value);q('ca').onclick=()=>cp('To: '+q('to').value+'\\nCC: '+q('cc').value+'\\nBCC: '+q('bcc').value+'\\nSubject: '+q('subject').value+'\\n\\n'+q('body').value);
+q('sendReal').onclick=async()=>{
+  const out=q('sendResult');
+  const toValue=q('to').value.trim();
+  if(emailAlreadySent){out.style.color='#b54708';out.textContent='This email was already sent. Edit it before sending again.';return;}
+  if(!q('approveSend').checked){out.style.color='#b42318';out.textContent='Please approve the email before sending.';return;}
+  if(!toValue){out.style.color='#b42318';out.textContent='Recipient (To) is empty.';return;}
+  if(!confirm('Send this email now to '+toValue+' from your connected Outlook account?'))return;
+  const btn=q('sendReal');btn.disabled=true;out.style.color='#374151';out.textContent='Sending…';
+  try{
+    const resp=await fetch('/api/email-send-real',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:q('to').value,cc:q('cc').value,bcc:q('bcc').value,subject:q('subject').value,body:q('body').value,approved:true})});
+    const d=await resp.json();
+    if(d.ok){emailAlreadySent=true;q('approveSend').checked=false;out.style.color='#067647';out.style.fontWeight='700';out.style.fontSize='16px';out.textContent='✓ Email sent successfully from Outlook.';}
+    else{out.style.color='#b42318';out.textContent='Error: '+(d.error||'Send failed');}
+  }catch(e){out.style.color='#b42318';out.textContent='Error: '+e.message;}
+  finally{btn.disabled=false;}
+};
+
+['to','cc','bcc','subject','body'].forEach(id=>{const el=q(id);if(el){el.addEventListener('input',()=>{emailAlreadySent=false;if(id==='to'&&q('recipientPreview'))q('recipientPreview').textContent=el.value||'Not selected';});}});
+if(q('to')&&q('recipientPreview'))q('recipientPreview').textContent=q('to').value||'Not selected';
+</script></body></html>

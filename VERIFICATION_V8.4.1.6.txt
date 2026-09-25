@@ -1,0 +1,20 @@
+Adam Acquisition v8.4.1.6 — Meeting End-of-Turn Segmentation + Technical Transcript Accuracy Fix
+
+Automated targeted verification:
+- 10/10 v8.4.1.6 targeted tests: PASS
+- Python app.py syntax compilation: PASS
+- Meeting-page JavaScript syntax check (Node): PASS
+
+Verified behaviors:
+1. Version bumped to v8.4.1.6.
+2. End-of-turn silence boundary increased to 4.2 seconds.
+3. Final microphone turn uses a merge grace rather than immediate dispatch.
+4. Active continuation speech delays dispatch.
+5. Contiguous final-turn fragments reuse one stable question ID.
+6. Typed meeting queries remain immediate.
+7. Low-information transient STT does not inflate Meeting Focus counters.
+8. Technical context is available to the local transcription cleaner.
+9. Hydronic flow/floor ambiguity is repaired conservatively.
+10. Legitimate “floor level” wording is preserved.
+
+Owner validation remains required for live microphone timing/room behavior.

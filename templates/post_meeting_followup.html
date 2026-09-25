@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Post-Meeting Follow-Up — {{ version }}</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f5f7fb;margin:0;padding:28px;color:#172033}
+    .card{max-width:1000px;margin:auto;background:#fff;border:1px solid #dbe3ef;border-radius:16px;padding:22px;box-shadow:0 4px 18px rgba(28,40,70,.05)}
+    .note{background:#edf6ff;padding:12px;border-radius:9px;margin:12px 0}.warn{background:#fff7e6;padding:12px;border-radius:9px;margin:12px 0}
+    .row{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}.action{border:1px solid #e1e6ef;border-radius:12px;padding:14px;margin:12px 0}
+    select,input{padding:10px;border:1px solid #bcc7d8;border-radius:8px;box-sizing:border-box}input[type=text]{min-width:260px;flex:1}
+    button,a.btn{padding:10px 14px;border-radius:8px;border:0;background:#172033;color:#fff;text-decoration:none;cursor:pointer;font-weight:700}.secondary{background:#40506b}
+    pre{white-space:pre-wrap;background:#f2f4f8;padding:14px;border-radius:8px;max-height:520px;overflow:auto}
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Post-Meeting Cross-App Follow-Up — {{ version }}</h1>
+  <p>Turn structured meeting outcomes into governed follow-up actions across email, calendar, documents and WhatsApp.</p>
+  <div class="warn"><strong>Acceptance mode:</strong> synthetic adapters only. No real email, calendar invitation, document upload or WhatsApp message is sent.</div>
+  <div class="note"><strong>Owner control:</strong> preparation actions may be previewed; consequential Send/Invite actions require explicit Owner Approval.</div>
+
+  <div class="action">
+    <h3>1. Email draft</h3>
+    <div class="row"><input id="emailSummary" type="text" value="Prepare meeting follow-up email"></div>
+  </div>
+  <div class="action">
+    <h3>2. Calendar invite</h3>
+    <div class="row"><input id="calendarSummary" type="text" value="Schedule follow-up review meeting"></div>
+    <label><input id="approved" type="checkbox"> Owner Approved for calendar invite</label>
+  </div>
+
+  <div class="row">
+    <button onclick="run('preview')">Preview Follow-Up</button>
+    <button class="secondary" onclick="run('synthetic_execute')">Run Synthetic Follow-Up</button>
+  </div>
+  <h3>Result</h3><pre id="out">Ready.</pre>
+  <p><a class="btn" href="/acquisition">Back to Acquisition Center</a></p>
+</div>
+<script>
+function actions(){return [
+  {connector:'email',action:'draft',summary:document.getElementById('emailSummary').value,owner_approved:false},
+  {connector:'calendar',action:'invite',summary:document.getElementById('calendarSummary').value,owner_approved:document.getElementById('approved').checked}
+]}
+async function run(mode){document.getElementById('out').textContent='Working...';try{const r=await fetch('/api/post-meeting-followup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,actions:actions()})});const j=await r.json();document.getElementById('out').textContent=JSON.stringify(j,null,2)}catch(e){document.getElementById('out').textContent='Request failed.'}}
+</script>
+</body>
+</html>

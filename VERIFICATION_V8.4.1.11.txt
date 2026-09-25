@@ -1,0 +1,20 @@
+Adam Acquisition v8.4.1.11 targeted verification
+
+1. VERSION is v8.4.1.11 — PASS
+2. Instant factual voice control exists and is enabled by default — PASS
+3. Instant voice is gated by the existing fast factual path — PASS
+4. Fast factual voice starts through browser speech without first waiting for /api/tts — PASS
+5. Professional server TTS path remains available for governed/non-fast replies — PASS
+6. Automatic server-voice fallback remains available when browser speech is unavailable — PASS
+7. Browser latency timing is tied to actual speech onstart with fallback — PASS
+8. Protected 4200 ms end-of-turn boundary remains unchanged — PASS
+9. Fast 2400 ms end-of-turn boundary remains unchanged — PASS
+10. v8.4.1.10 12000 ms short-turn eligibility remains unchanged — PASS
+11. Clarification guard remains present — PASS
+12. Approval consistency guard remains present — PASS
+13. Meeting-session isolation guard remains present — PASS
+14. Python compile — PASS
+15. Meeting-page JavaScript syntax — PASS
+16. New targeted pytest — 8/8 PASS
+
+Automated/static verification only. Actual voice-start latency depends on browser/device speech availability and the deployed computer.

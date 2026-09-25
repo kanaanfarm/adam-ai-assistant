@@ -1,0 +1,7 @@
+Adam Acquisition v8.4.1.0 verification
+
+Targeted new speaker-echo protection tests: 9 PASS
+Preserved affected meeting/voice/typed-query/correction tests: 21 PASS
+Python compile: PASS
+JavaScript syntax (real_meeting_attendance): PASS
+Physical Windows speaker/microphone test: NOT CLAIMED; user must confirm.

@@ -1,0 +1,11 @@
+Adam Acquisition v8.4.0.3 — Meeting Voice Auto-Reply Reliability Fix
+
+Automated validation completed before packaging:
+- New meeting voice reliability tests: 7 PASS
+- Selected preserved affected-behavior tests: 12 PASS
+- Total selected behavior checks: 19 PASS
+- Python compile check: PASS
+- Meeting-page JavaScript syntax (Node --check): PASS
+- Package ZIP integrity: checked after packaging
+
+Physical browser/microphone/speaker playback still requires the owner's local Windows/browser test because this build environment has no access to the owner's audio device or browser autoplay policy.

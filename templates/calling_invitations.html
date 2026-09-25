@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calling & Invitations - {{ app_name }}</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#172033;--muted:#697386;--line:#d9dee7;--dark:#111827;--good:#067647;--bad:#b42318;--warn:#b54708}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1080px;margin:24px auto;padding:0 16px}.card{background:var(--card);border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 6px 18px rgba(17,24,39,.04)}
+h1{margin:0 0 8px}h2{margin:0 0 14px;font-size:20px}.small{font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{display:block;font-weight:700;font-size:13px;margin:4px 0 6px}
+input,textarea,select,button,a.btn{font:inherit;padding:10px 12px;border:1px solid #cbd2dc;border-radius:8px;background:#fff;color:var(--text)}textarea{min-height:90px;resize:vertical}
+button{cursor:pointer;font-weight:700}.primary{background:var(--dark);color:#fff;border-color:var(--dark)}.danger{background:#9b2c2c;color:#fff;border-color:#9b2c2c}.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.btn{text-decoration:none;font-weight:600}.check{display:flex;gap:8px;align-items:center}.check input{width:auto}.status{margin-top:12px;padding:12px;border-radius:8px;background:#f8fafc;border:1px solid var(--line);white-space:pre-wrap}.good{background:#ecfdf3;border-color:#abefc6;color:var(--good)}.bad{background:#fef3f2;border-color:#fecdca;color:var(--bad)}.warn{background:#fffaeb;border-color:#fedf89;color:var(--warn)}
+.boundary{background:#fffaeb;border:1px solid #fedf89;border-radius:10px;padding:12px;color:#7a2e0e}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.grid,.split{grid-template-columns:1fr}.full{grid-column:auto}.wrap{margin:8px auto;padding:8px}}
+</style>
+</head><body><div class="wrap">
+<div class="card"><h1>Calling & Invitations <span class="small">{{ version }}</span></h1>
+<p class="small">Prepare meeting invitations and phone-call launches from Adam with explicit owner approval.</p>
+<div class="boundary"><b>Governance boundary:</b> Outlook invitations can be sent only after Owner Approval and only when Microsoft is connected. Phone Call opens the device dialer after Owner Approval. This version does <b>not</b> claim autonomous PSTN/VoIP calling or an AI voice bot talking to a person on its own.</div>
+<div class="actions" style="margin-top:12px"><a class="btn" href="/">← Back to Adam</a><a class="btn" href="/contacts">Contacts</a><a class="btn" href="/calendar">Calendar</a></div></div>
+
+<div class="split">
+<div class="card"><h2>Meeting Invitation</h2>
+<label>Contact</label><select id="inviteContact"><option value="">Select saved contact</option>{% for c in contacts %}<option value="{{ loop.index0 }}">{{ c.name }}{% if c.email %} — {{ c.email }}{% endif %}</option>{% endfor %}</select>
+<div class="grid">
+<div><label>Name</label><input id="attendeeName"></div><div><label>Email</label><input id="attendeeEmail" type="email"></div>
+<div class="full"><label>Meeting title</label><input id="title" placeholder="HVAC Coordination"></div>
+<div><label>Date</label><input id="date" type="date"></div><div><label>Start time</label><input id="startTime" type="time"></div>
+<div><label>Duration</label><select id="duration"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></div>
+<div><label>Location</label><input id="location" placeholder="Office / Site"></div>
+<div class="full"><label>Agenda</label><textarea id="agenda" placeholder="Purpose and discussion points"></textarea></div>
+<div class="full check"><input id="online" type="checkbox"><label for="online" style="margin:0">Microsoft Teams online meeting</label></div>
+</div>
+<div class="actions" style="margin-top:12px"><button id="previewInvite">Preview Invitation</button></div>
+<div id="invitePreview" class="status">Ready.</div>
+<div class="check" style="margin-top:12px"><input id="approveInvite" type="checkbox"><label for="approveInvite" style="margin:0">Owner Approval — create and send this invitation</label></div>
+<button class="primary" id="sendInvite" style="margin-top:10px">Create & Send in Outlook</button>
+<div id="inviteResult" class="status">Not sent.</div>
+</div>
+
+<div class="card"><h2>Phone Call</h2>
+<label>Contact</label><select id="callContact"><option value="">Select saved contact</option>{% for c in contacts %}<option value="{{ loop.index0 }}">{{ c.name }}{% if c.phone %} — {{ c.phone }}{% endif %}</option>{% endfor %}</select>
+<label>Name</label><input id="callName"><label>Phone</label><input id="phone" placeholder="+971... or +961..."><label>Purpose / note</label><textarea id="purpose" placeholder="Reason for the call"></textarea>
+<button id="previewCall" style="margin-top:10px">Preview Call</button><div id="callPreview" class="status">Ready.</div>
+<div class="check" style="margin-top:12px"><input id="approveCall" type="checkbox"><label for="approveCall" style="margin:0">Owner Approval — open device dialer for this number</label></div>
+<button class="primary" id="launchCall" style="margin-top:10px">Open Phone Dialer</button>
+<div id="callResult" class="status">Not launched.</div>
+</div></div>
+</div>
+<script>
+const contacts={{ contacts|tojson }}; const q=id=>document.getElementById(id);
+function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':00'}
+q('inviteContact').onchange=()=>{const c=contacts[Number(q('inviteContact').value)];if(c){q('attendeeName').value=c.name||'';q('attendeeEmail').value=c.email||'';}};
+q('callContact').onchange=()=>{const c=contacts[Number(q('callContact').value)];if(c){q('callName').value=c.name||'';q('phone').value=c.phone||'';}};
+function invitationBody(){return {contact_name:q('attendeeName').value,attendee_email:q('attendeeEmail').value,title:q('title').value,date:q('date').value,start_time:q('startTime').value,duration_minutes:Number(q('duration').value),location:q('location').value,agenda:q('agenda').value,is_online:q('online').checked}}
+q('previewInvite').onclick=async()=>{const r=await fetch('/api/personal-assistant/calling-invitations/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'invitation',...invitationBody()})});const d=await r.json();q('invitePreview').className='status '+(d.ok?'good':'warn');q('invitePreview').textContent=JSON.stringify(d,null,2)};
+q('sendInvite').onclick=async()=>{if(!q('approveInvite').checked){q('inviteResult').className='status bad';q('inviteResult').textContent='Owner Approval is required.';return}const b=invitationBody();if(!b.title||!b.date||!b.start_time){q('inviteResult').className='status bad';q('inviteResult').textContent='Title, date and time are required.';return}const start=new Date(b.date+'T'+b.start_time+':00'),end=new Date(start.getTime()+b.duration_minutes*60000);q('inviteResult').className='status warn';q('inviteResult').textContent='Creating Outlook invitation…';try{const r=await fetch('/api/create-meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved:true,title:b.title,start:localISO(start),end:localISO(end),attendee_email:b.attendee_email,attendee_name:b.contact_name,location:b.location,agenda:b.agenda,is_online:b.is_online})});const d=await r.json();if(!d.ok)throw new Error(d.error||'Unable to create meeting');q('inviteResult').className='status good';q('inviteResult').textContent='Invitation created in Outlook.'+(d.online_join_url?' Teams link created.':'');q('approveInvite').checked=false}catch(e){q('inviteResult').className='status bad';q('inviteResult').textContent='Error: '+e.message}};
+function callBody(){return {action:'call',contact_name:q('callName').value,phone:q('phone').value,purpose:q('purpose').value}}
+q('previewCall').onclick=async()=>{const r=await fetch('/api/personal-assistant/calling-invitations/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(callBody())});const d=await r.json();q('callPreview').className='status '+(d.ok?'good':'warn');q('callPreview').textContent=JSON.stringify(d,null,2)};
+q('launchCall').onclick=()=>{const phone=q('phone').value.trim();if(!q('approveCall').checked){q('callResult').className='status bad';q('callResult').textContent='Owner Approval is required.';return}if(!phone){q('callResult').className='status bad';q('callResult').textContent='Phone number is required.';return}q('callResult').className='status good';q('callResult').textContent='Opening device dialer. Adam has not placed the call autonomously.';q('approveCall').checked=false;window.location.href='tel:'+phone;};
+</script></body></html>

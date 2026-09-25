@@ -1,0 +1,81 @@
+--- adam84110_orig/templates/real_meeting_attendance.html	2026-09-10 20:31:05.000000000 +0000
++++ adam84110/templates/real_meeting_attendance.html	2026-09-10 20:54:04.503447089 +0000
+@@ -45,7 +45,7 @@
+ let meetingQuestionQueue=[];let meetingAdamSpeaking=false;let meetingAdamAudio=null;let meetingAdamAudioUrl="";let meetingAdamSpeechResolve=null;let meetingLastSpokenText="";let meetingLastSpokenAt=0;let meetingAdamAudioContextSource=null;
+ let meetingVoiceUnlocked=false;let meetingVoiceUnlockContext=null;let meetingVoiceJobSeq=0;let meetingSpeakerOutputActive=false;let meetingRecorderContainsAdamAudio=false;let meetingLastVoiceDeliveryOk=false;
+ let meetingRecorderStopReason='';let meetingLastTranscriptText='';let meetingLastTranscriptAt=0;
+-const MEETING_END_OF_TURN_SILENCE_MS=4200;const MEETING_FAST_END_OF_TURN_SILENCE_MS=2400;const MEETING_FAST_TURN_MAX_SPEECH_MS=6500;const MEETING_RESPONSE_STABILITY_MS=650;const MEETING_FINAL_TURN_MERGE_GRACE_MS=1500;const MEETING_FINAL_TURN_FAST_COMPLETE_GRACE_MS=350;const MEETING_FINAL_TURN_MAX_WAIT_MS=10000;const MEETING_CONTINUATION_SPEECH_HOLD_MS=900;const MEETING_MAX_AUTOREPLY_WAIT_MS=6000;const MEETING_SILENT_CHUNK_MS=8000;const MEETING_MAX_UTTERANCE_MS=60000;const MEETING_CLARIFICATION_WINDOW_MS=45000;const MEETING_FAST_VOICE_CHUNK_CHARS=140;
++const MEETING_END_OF_TURN_SILENCE_MS=4200;const MEETING_FAST_END_OF_TURN_SILENCE_MS=2400;const MEETING_FAST_TURN_MAX_SPEECH_MS=12000;const MEETING_RESPONSE_STABILITY_MS=650;const MEETING_FINAL_TURN_MERGE_GRACE_MS=1500;const MEETING_FINAL_TURN_FAST_COMPLETE_GRACE_MS=350;const MEETING_FINAL_TURN_MAX_WAIT_MS=10000;const MEETING_CONTINUATION_SPEECH_HOLD_MS=900;const MEETING_MAX_AUTOREPLY_WAIT_MS=6000;const MEETING_SILENT_CHUNK_MS=8000;const MEETING_MAX_UTTERANCE_MS=60000;const MEETING_CLARIFICATION_WINDOW_MS=45000;const MEETING_FAST_VOICE_CHUNK_CHARS=140;
+ const transcript=document.getElementById('transcript'); const micStatus=document.getElementById('micStatus'); const modeEl=document.getElementById('mode'); const participantPanel=document.getElementById('participantPanel');
+ const meetingDateTimeEl=document.getElementById('meetingDateTime');if(meetingDateTimeEl&&!meetingDateTimeEl.value){const d=new Date();const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);meetingDateTimeEl.value=local.toISOString().slice(0,16);}
+ let meetingAutoResponseBusy=false;let meetingAutoInFlightKey='';let meetingLastAutoQuestion='';let meetingLastAutoAt=0;let meetingPendingAutoParts=[];let meetingPendingAutoQuestionId='';let meetingPendingAutoTimer=null;let meetingPendingAutoStartedAt=0;let meetingLastAcceptedTranscriptAt=0;let meetingLastFocusCandidateText='';let meetingLastFocusCandidateAt=0;
+@@ -91,8 +91,8 @@
+  const idx=meetingReplyTraceSteps.findIndex(x=>x.step===Number(step));const item={step:Number(step),label:String(label||'')};if(idx>=0)meetingReplyTraceSteps[idx]=item;else meetingReplyTraceSteps.push(item);meetingReplyTraceSteps.sort((a,b)=>a.step-b.step);
+  const el=document.getElementById('meetingReplyTrace');if(el)el.innerHTML='<b>Meeting reply trace:</b> '+meetingReplyTraceSteps.map(x=>x.step+' '+x.label).join(' → ');
+ }
+-let meetingLatencyTrace={speechEndAt:0,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false};
+-function resetMeetingLatencyTrace(){meetingLatencyTrace={speechEndAt:0,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false};const el=document.getElementById('meetingLatencyStatus');if(el)el.innerHTML='<b>Meeting response latency:</b> ready';}
++let meetingLatencyTrace={speechEndAt:0,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false,endTurnMode:''};
++function resetMeetingLatencyTrace(){meetingLatencyTrace={speechEndAt:0,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false,endTurnMode:''};const el=document.getElementById('meetingLatencyStatus');if(el)el.innerHTML='<b>Meeting response latency:</b> ready';}
+ function renderMeetingLatencyTrace(){
+  const t=meetingLatencyTrace,el=document.getElementById('meetingLatencyStatus');if(!el)return;
+  const sec=ms=>(Math.max(0,Number(ms)||0)/1000).toFixed(1)+'s';
+@@ -102,7 +102,7 @@
+  const focusMerge=(t.aiStartAt&&t.sttEndAt)?t.aiStartAt-t.sttEndAt:0;
+  const ai=(t.aiEndAt&&t.aiStartAt)?t.aiEndAt-t.aiStartAt:0;
+  const voicePrep=(t.voiceStartAt&&t.aiEndAt)?t.voiceStartAt-t.aiEndAt:0;
+- const parts=[];if(total)parts.push('total to voice start '+sec(total));if(endTurn)parts.push('end-turn '+sec(endTurn));if(stt)parts.push('STT '+sec(stt));if(focusMerge)parts.push('focus/merge '+sec(focusMerge));if(ai)parts.push('AI '+sec(ai));if(voicePrep)parts.push('voice prep '+sec(voicePrep));if(t.providerMs)parts.push('provider '+sec(t.providerMs));if(t.fastPath)parts.push('fast factual path');
++ const parts=[];if(total)parts.push('total to voice start '+sec(total));if(endTurn)parts.push('end-turn '+sec(endTurn));if(stt)parts.push('STT '+sec(stt));if(focusMerge)parts.push('focus/merge '+sec(focusMerge));if(ai)parts.push('AI '+sec(ai));if(voicePrep)parts.push('voice prep '+sec(voicePrep));if(t.providerMs)parts.push('provider '+sec(t.providerMs));if(t.endTurnMode)parts.push('turn '+t.endTurnMode);if(t.fastPath)parts.push('fast factual path');
+  el.innerHTML='<b>Meeting response latency:</b> '+(parts.length?parts.join(' | '):'measuring…');
+ }
+ function meetingTextLooksCompleteForFastReply(text){
+@@ -429,7 +429,16 @@
+     if(rms>threshold){
+      meetingChunkSpeechFrames++;
+      const now=Date.now();meetingUtteranceSpeechStarted=true;if(!meetingUtteranceFirstSpeechAt)meetingUtteranceFirstSpeechAt=now;meetingUtteranceLastSpeechAt=now;meetingLastParticipantSpeechAt=now;meetingLatencyTrace.speechEndAt=now;
+-     if(meetingChunkSpeechFrames===2){meetingLatencyTrace={speechEndAt:now,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false};renderMeetingLatencyTrace();micStatus.textContent='Microphone: listening — speech detected; Adam will answer after a natural pause';}
++     if(meetingChunkSpeechFrames===2){
++      // v8.4.1.10: do not wipe timing for a question already dispatched to Adam.
++      // The recorder immediately re-arms while AI/voice work is still in flight; room
++      // noise or a follow-up can otherwise reset the shared trace and leave only
++      // end-turn/STT visible after the spoken reply has completed.
++      if(!meetingAutoResponseBusy&&!meetingLatencyTrace.aiStartAt&&!meetingLatencyTrace.questionId){
++       meetingLatencyTrace={speechEndAt:now,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false,endTurnMode:''};
++      }else if(!meetingLatencyTrace.speechEndAt){meetingLatencyTrace.speechEndAt=now;}
++      renderMeetingLatencyTrace();micStatus.textContent='Microphone: listening — speech detected; Adam will answer after a natural pause';
++     }
+     }else{
+      meetingNoiseFloor=Math.max(0.001,Math.min(0.02,(meetingNoiseFloor*0.985)+(rms*0.015)));
+     }
+@@ -466,7 +475,9 @@
+   const now=Date.now();const elapsed=now-meetingRecorderStartedAt;
+   const spokenSpan=(meetingUtteranceFirstSpeechAt&&meetingUtteranceLastSpeechAt)?Math.max(0,meetingUtteranceLastSpeechAt-meetingUtteranceFirstSpeechAt):0;
+   const fastResponseEnabled=!!((document.getElementById('meetingFastResponse')||{}).checked);
+-  const endOfTurnSilenceMs=(fastResponseEnabled&&spokenSpan>0&&spokenSpan<=MEETING_FAST_TURN_MAX_SPEECH_MS)?MEETING_FAST_END_OF_TURN_SILENCE_MS:MEETING_END_OF_TURN_SILENCE_MS;
++  const useFastEndTurn=fastResponseEnabled&&spokenSpan>0&&spokenSpan<=MEETING_FAST_TURN_MAX_SPEECH_MS;
++  const endOfTurnSilenceMs=useFastEndTurn?MEETING_FAST_END_OF_TURN_SILENCE_MS:MEETING_END_OF_TURN_SILENCE_MS;
++  if(meetingUtteranceSpeechStarted&&!meetingLatencyTrace.endTurnMode)meetingLatencyTrace.endTurnMode=useFastEndTurn?'fast':'protected';
+   const endOfTurn=meetingUtteranceSpeechStarted&&meetingChunkSpeechFrames>=2&&meetingUtteranceLastSpeechAt>0&&(now-meetingUtteranceLastSpeechAt)>=endOfTurnSilenceMs;
+   const silentBound=!meetingUtteranceSpeechStarted&&elapsed>=MEETING_SILENT_CHUNK_MS;
+   const maxBound=elapsed>=MEETING_MAX_UTTERANCE_MS;
+--- adam84110_orig/app.py	2026-09-10 20:29:36.000000000 +0000
++++ adam84110/app.py	2026-09-10 20:54:04.505380192 +0000
+@@ -188,7 +188,7 @@
+ from adam_core.meeting_language_policy import DEFAULT_REPLY_LANGUAGE, detect_requested_reply_language, tts_locale_for_reply, professional_scope_prompt
+ from adam_core.meeting_focus_engine import evaluate_meeting_focus, detect_explicit_project_mismatch, self_test as meeting_focus_self_test
+ 
+-VERSION = "v8.4.1.9"
++VERSION = "v8.4.1.10"
+ BASELINE_VERSION = "v0.8.0.1"
+ BUILD_CHANNEL = "acquisition"
+ 
+@@ -8716,6 +8716,9 @@
+         "closed_session_tombstone_guard": True,
+         "client_session_epoch_isolation": True,
+         "smart_end_of_turn_silence_ms": 4200,
++        "fast_end_of_turn_silence_ms": 2400,
++        "fast_turn_max_speech_ms": 12000,
++        "latency_trace_inflight_preservation": True,
+         "ai_identity_disclosure_required": True, "may_impersonate_owner": False,
+         "may_make_consequential_commitments_without_separate_approval": False,
+         "real_platform_join_available": False, "rehearsal_mode_available": True,

@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adam Acquisition Center</title>
+  <style>
+    :root{font-family:Arial,Helvetica,sans-serif;color:#172033;background:#f5f7fb}
+    body{margin:0}.wrap{width:min(1500px,calc(100% - 48px));margin:0 auto;padding:28px 0 40px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px}
+    h1{margin:0;font-size:30px}.sub{color:#5b6475;margin-top:6px}.pill{background:#e8f7ee;color:#176b3a;padding:8px 12px;border-radius:999px;font-weight:700}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}.card{background:white;border:1px solid #e1e6ef;border-radius:14px;padding:18px;box-shadow:0 4px 18px rgba(28,40,70,.05)}
+    .card h2,.card h3{margin-top:0}.ok{color:#176b3a;font-weight:700}.warn{color:#8a5a00;font-weight:700}.mono{font-family:Consolas,monospace;font-size:13px;background:#f3f5f8;border-radius:8px;padding:10px;overflow:auto}
+    button,a.btn{border:0;border-radius:9px;padding:10px 14px;background:#172033;color:#fff;text-decoration:none;cursor:pointer;font-weight:700}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+    ul{padding-left:20px}li{margin:7px 0}.small{font-size:13px;color:#687386}
+    .wrap>.card,.wrap>.evidence-panel{margin-top:16px}.wrap>.card:first-child{margin-top:0}
+    @media(max-width:700px){.wrap{width:calc(100% - 28px);padding:16px 0 28px}.top{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}button,a.btn{display:inline-block;margin:3px 2px}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>Adam Acquisition Center</h1><div class="sub">Buyer-safe capability evidence for {{ app_name }} {{ version }}</div></div>
+    <div id="overall" class="pill">Loading readiness…</div>
+  </div>
+  <div class="grid">
+    <section class="card"><h2>Core Readiness</h2><div id="checks">Loading…</div></section>
+    <section class="card"><h2>Governance Evidence</h2><div id="evidence">Loading…</div></section>
+    <section class="card"><h2>Privacy Boundary</h2><div id="privacy">Loading…</div></section>
+  </div>
+  <h2 style="margin-top:24px">Acquisition Demo Scenarios</h2>
+  <div id="scenarios" class="grid"></div>
+  <section class="evidence-panel" style="margin-top:22px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Buyer Evidence Pack</h2>
+  <p>Generate a privacy-safe, versioned diligence snapshot containing readiness checks, governance counts, demo scenario metadata and receipt fingerprints.</p>
+  <p><strong>Excluded by design:</strong> credentials, contact details, message bodies, attachment contents and private memory values.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Technical Diligence Manifest</h2>
+  <p>Buyer-safe capability matrix, integration configuration state, governance controls, evidence routes and an explicit risk register.</p>
+  <p><strong>Purpose:</strong> make technical diligence faster without exposing private user or credential data.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Architecture De-risking</h2>
+  <p>Shows which buyer-critical functions have been extracted from the legacy application into tested <code>adam_core</code> modules.</p>
+  <p><strong>Purpose:</strong> make the remaining architecture debt explicit while demonstrating measurable modularization progress.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Service Boundary Extraction</h2>
+  <p>Contacts and Follow-Ups now use tested <code>adam_core</code> service boundaries while the existing owner-facing routes and behavior remain preserved.</p>
+  <p><strong>Completed next step:</strong> email, calendar and WhatsApp owner-controlled execution adapters are now extracted and tested.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Connector Execution Adapters</h2>
+  <p>Email, Outlook Calendar and WhatsApp execution now pass through pure tested <code>adam_core.connectors</code> approval/validation adapters before invoking the existing external transport callbacks.</p>
+  <p><strong>Buyer value:</strong> consequential execution policy can be tested without credentials, while transport credentials remain outside the core adapter.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Microsoft Identity Boundary</h2>
+  <p>Microsoft client configuration persistence, serialized token-cache persistence and device-flow state projection are isolated in tested <code>adam_core.microsoft_identity</code> services.</p>
+  <p><strong>Buyer value:</strong> identity persistence can be audited without exposing token values, client IDs, usernames or requiring a live Microsoft sign-in.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">WhatsApp Configuration + Webhook Boundary</h2>
+  <p>WhatsApp configuration persistence, environment overrides, webhook challenge verification, HMAC signature checks and incoming-message projection are isolated in tested <code>adam_core.whatsapp_boundary</code> services.</p>
+  <p><strong>Buyer value:</strong> webhook security and configuration behavior can be audited without exposing access tokens, verify-token values, app secrets, phone identifiers or message contents.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Document Processing Boundary</h2>
+  <p>PDF, DOCX, XLSX/XLSM and plain-text extraction, attachment classification, bounded local processing and DOCX rendering are isolated in tested <code>adam_core.document_processing</code> services.</p>
+  <p><strong>Buyer value:</strong> document handling can be audited without exposing attachment contents and without requiring an AI provider or external network operation for extraction.</p>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Adam Computer Use Agent — v4.0</h2>
+  <p>Governed foundation for screen/browser operation. Read/navigation actions may proceed; consequential actions such as Submit, Send, Delete, Purchase, Confirm and financial actions require explicit owner approval.</p>
+  <p><strong>Current stage:</strong> safety/action boundary and synthetic driver are tested. Live desktop/browser control is intentionally the next implementation step.</p>
+  <a class="btn" href="/api/acquisition/computer-use-agent" target="_blank">Computer Use JSON</a>
+  <a class="btn" href="/api/acquisition/computer-use-agent/self-test" target="_blank">Computer Use Self-Test</a>
+</section>
+
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Adam Live Browser Control — v4.1</h2>
+  <p>Local Edge/Chrome browser driver for governed webpage navigation, observation, CSS-targeted clicks and owner-approved typing.</p>
+  <p><strong>Safety:</strong> only HTTP/HTTPS navigation is accepted. Typing and button/submit clicks require explicit owner approval. Buyer evidence never contains page text, URLs, typed values or credentials.</p>
+  <a class="btn" href="/computer-use-browser">Open Live Browser Control</a>
+  <a class="btn" href="/api/acquisition/live-browser" target="_blank">Live Browser JSON</a>
+  <a class="btn" href="/api/acquisition/live-browser/self-test" target="_blank">Live Browser Self-Test</a>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Screen Perception + Adaptive Recovery — v4.2</h2>
+  <p>Adam inventories visible interactive controls without reading form values and can recover from a moved/missing selector using bounded fallbacks or a visible-text hint.</p>
+  <p><strong>Safety:</strong> recovery never bypasses Owner Approval. Consequential controls remain blocked until explicitly approved.</p>
+  <a class="btn" href="/computer-use-browser">Open Perception / Recovery Control</a>
+  <a class="btn" href="/api/acquisition/perception-recovery" target="_blank">Perception + Recovery JSON</a>
+  <a class="btn" href="/api/acquisition/perception-recovery/self-test" target="_blank">Perception + Recovery Self-Test</a>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Cross-App Execution Orchestrator — v4.3</h2>
+  <p>Adam can preview and execute bounded workflows across browser, documents, email, calendar and WhatsApp through injected adapters.</p>
+  <p><strong>Safety:</strong> every consequential step is owner-gated at execution time. Buyer evidence contains no credentials, message bodies, contact values, URLs or document contents.</p>
+  <a class="btn" href="/cross-app-execution">Open Cross-App Control</a>
+  <a class="btn" href="/api/acquisition/cross-app-execution" target="_blank">Cross-App JSON</a>
+  <a class="btn" href="/api/acquisition/cross-app-execution/self-test" target="_blank">Cross-App Self-Test</a>
+</section>
+<section class="evidence-panel" style="margin-top:16px;padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#fff;">
+  <h2 style="margin-top:0;">Meeting Agent Foundation — v4.4</h2>
+  <p>Adam converts bounded meeting transcript segments into notes and action items and can answer from approved knowledge.</p>
+  <p><strong>Safety:</strong> speaking, commitments, invitations and follow-ups require Owner Approval. Adam identifies itself as AI and cannot impersonate the owner.</p>
+  <a class="btn" href="/meeting-agent">Open Meeting Agent Control</a>
+  <a class="btn" href="/api/acquisition/meeting-agent" target="_blank">Meeting Agent JSON</a>
+  <a class="btn" href="/api/acquisition/meeting-agent/self-test" target="_blank">Meeting Agent Self-Test</a>
+</section>
+<div class="actions">
+    <a class="btn" href="/">Back to Adam</a>
+    <a class="btn" href="/api/acquisition/readiness" target="_blank">Readiness JSON</a>
+    <a class="btn" href="/api/governance" target="_blank">Governance JSON</a>
+    <a class="btn" href="/api/acquisition/evidence-pack" target="_blank">Evidence Pack JSON</a>
+    <a class="btn" href="/api/acquisition/evidence-pack/download">Download Evidence Pack</a>
+    <a class="btn" href="/api/acquisition/diligence" target="_blank">Diligence JSON</a>
+    <a class="btn" href="/api/acquisition/diligence/download">Download Diligence</a>
+    <a class="btn" href="/api/acquisition/architecture" target="_blank">Architecture JSON</a>
+    <a class="btn" href="/api/acquisition/architecture/download">Download Architecture</a>
+    <a class="btn" href="/api/acquisition/service-boundaries" target="_blank">Service Boundaries JSON</a>
+    <a class="btn" href="/api/acquisition/service-boundaries/download">Download Service Boundaries</a>
+    <a class="btn" href="/api/acquisition/connector-boundaries" target="_blank">Connector Boundaries JSON</a>
+    <a class="btn" href="/api/acquisition/connector-boundaries/self-test" target="_blank">Connector Self-Test</a>
+    <a class="btn" href="/api/acquisition/connector-boundaries/download">Download Connector Boundaries</a>
+    <a class="btn" href="/api/acquisition/identity-boundary" target="_blank">Identity Boundary JSON</a>
+    <a class="btn" href="/api/acquisition/identity-boundary/self-test" target="_blank">Identity Self-Test</a>
+    <a class="btn" href="/api/acquisition/identity-boundary/download">Download Identity Boundary</a>
+    <a class="btn" href="/api/acquisition/whatsapp-boundary" target="_blank">WhatsApp Boundary JSON</a>
+    <a class="btn" href="/api/acquisition/whatsapp-boundary/self-test" target="_blank">WhatsApp Boundary Self-Test</a>
+    <a class="btn" href="/api/acquisition/whatsapp-boundary/download">Download WhatsApp Boundary</a>
+    <a class="btn" href="/api/acquisition/document-boundary" target="_blank">Document Boundary JSON</a>
+    <a class="btn" href="/api/acquisition/document-boundary/self-test" target="_blank">Document Boundary Self-Test</a>
+    <a class="btn" href="/api/acquisition/document-boundary/download">Download Document Boundary</a>
+  </div>
+<script>
+const nice = s => String(s).replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase());
+async function load(){
+  const r=await fetch('/api/acquisition/readiness'); const d=await r.json(); const a=d.acquisition||{};
+  document.getElementById('overall').textContent=a.all_core_checks_pass?'Core checks PASS':'Attention required';
+  document.getElementById('overall').className=a.all_core_checks_pass?'pill':'pill warn';
+  const checks=a.readiness_checks||{};
+  document.getElementById('checks').innerHTML='<ul>'+Object.entries(checks).map(([k,v])=>`<li><span class="${v?'ok':'warn'}">${v?'PASS':'CHECK'}</span> — ${nice(k)}</li>`).join('')+'</ul>';
+  const e=a.governance_evidence||{};
+  document.getElementById('evidence').innerHTML=`<div><b>Workflows:</b> ${e.workflow_count||0}</div><div><b>Approvals:</b> ${e.approval_events||0}</div><div><b>Completions:</b> ${e.completion_events||0}</div><div class="mono">${JSON.stringify(e.record_sources||{},null,2)}</div>`;
+  const p=a.privacy||{};
+  document.getElementById('privacy').innerHTML='<ul>'+Object.entries(p).map(([k,v])=>`<li><span class="${v?'warn':'ok'}">${v?'EXPOSED':'PROTECTED'}</span> — ${nice(k)}</li>`).join('')+'</ul>';
+  document.getElementById('scenarios').innerHTML=(a.demo_scenarios||[]).map(s=>`<section class="card"><h3>${s.name}</h3><p>${s.goal}</p><div class="small">Owner approval: ${s.approval_required?'Required':'Not required'}</div><div class="mono">${(s.evidence_endpoints||[]).join('\n')}</div></section>`).join('');
+}
+load().catch(e=>{document.getElementById('overall').textContent='Unable to load'; console.error(e)});
+</script>
+
+<section class="card" style="margin-top:18px;">
+  <h2 style="margin-top:0;">Microsoft Graph Transport Boundary</h2>
+  <p>Outlook mail, calendar, inbox, message-read and reply HTTP transport now pass through tested <code>adam_core.microsoft_graph_transport</code> services with injected token and HTTP providers.</p>
+  <p><strong>Buyer value:</strong> Microsoft Graph request/response behavior can be tested without credentials or live network calls, while existing owner-facing Outlook routes remain preserved.</p>
+  <a class="btn" href="/api/acquisition/graph-transport-boundary">Graph Transport JSON</a>
+  <a class="btn" href="/api/acquisition/graph-transport-boundary/self-test">Graph Transport Self-Test</a>
+  <a class="btn" href="/api/acquisition/graph-transport-boundary/download">Download Graph Transport Boundary</a>
+</section>
+
+<div class="card">
+  <h2 style="margin-top:0;">WhatsApp Cloud Transport Boundary</h2>
+  <p>Buyer-safe evidence for the extracted WhatsApp Cloud API network transport. Owner approval remains enforced by the existing connector adapter.</p>
+  <a class="btn" href="/api/acquisition/whatsapp-transport-boundary">WhatsApp Transport JSON</a>
+  <a class="btn" href="/api/acquisition/whatsapp-transport-boundary/self-test">WhatsApp Transport Self-Test</a>
+  <a class="btn" href="/api/acquisition/whatsapp-transport-boundary/download">Download WhatsApp Transport Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Vision AI Transport Boundary</h2>
+  <p>Camera and image-attachment analysis now passes through tested <code>adam_core.vision_ai_transport</code> services with injected AI credentials and HTTP transport.</p>
+  <p><strong>Buyer value:</strong> multimodal request construction and response handling can be audited without exposing image bytes, prompts, API keys, model responses or requiring a live AI-provider network call.</p>
+  <a class="btn" href="/api/acquisition/vision-transport-boundary">Vision Transport JSON</a>
+  <a class="btn" href="/api/acquisition/vision-transport-boundary/self-test">Vision Transport Self-Test</a>
+  <a class="btn" href="/api/acquisition/vision-transport-boundary/download">Download Vision Transport Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">AI Provider Transport Boundary</h2>
+  <p>General text generation, drafting and translation requests now pass through tested <code>adam_core.ai_provider_transport</code> services with injected credentials and HTTP transport.</p>
+  <p><strong>Buyer value:</strong> text-AI request construction and provider response handling can be audited without exposing API keys, user prompts, system prompts, model responses or requiring a live AI-provider network call.</p>
+  <a class="btn" href="/api/acquisition/ai-provider-boundary">AI Provider JSON</a>
+  <a class="btn" href="/api/acquisition/ai-provider-boundary/self-test">AI Provider Self-Test</a>
+  <a class="btn" href="/api/acquisition/ai-provider-boundary/download">Download AI Provider Boundary</a>
+</div>
+<div class="card">
+  <h2 style="margin-top:0;">Configuration Service Boundary</h2>
+  <p>AI provider configuration persistence now passes through tested <code>adam_core.configuration</code> services with bounded atomic writes and environment fallback.</p>
+  <p><strong>Buyer value:</strong> configuration behavior can be audited without exposing API keys, configuration values, environment values, file contents, contacts or private memory.</p>
+  <a class="btn" href="/api/acquisition/configuration-boundary">Configuration JSON</a>
+  <a class="btn" href="/api/acquisition/configuration-boundary/self-test">Configuration Self-Test</a>
+  <a class="btn" href="/api/acquisition/configuration-boundary/download">Download Configuration Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Voice AI Transport Boundary</h2>
+  <p>Buyer-safe evidence for Adam's extracted speech synthesis provider transport.</p>
+  <a class="btn" href="/api/acquisition/voice-transport-boundary">Voice Transport JSON</a>
+  <a class="btn" href="/api/acquisition/voice-transport-boundary/self-test">Voice Transport Self-Test</a>
+  <a class="btn" href="/api/acquisition/voice-transport-boundary/download">Download Voice Transport Boundary</a>
+</div>
+
+
+<div class="card">
+  <h2 style="margin-top:0;">Runtime Configuration Consolidation</h2>
+  <p>Environment-backed runtime configuration is centralized behind a small tested core service while buyer evidence exposes presence booleans only.</p>
+  <a class="btn" href="/api/acquisition/runtime-configuration-boundary">Runtime Configuration JSON</a>
+  <a class="btn" href="/api/acquisition/runtime-configuration-boundary/self-test">Runtime Configuration Self-Test</a>
+  <a class="btn" href="/api/acquisition/runtime-configuration-boundary/download">Download Runtime Configuration Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Windows Speech Fallback Boundary</h2>
+  <p>Adam's local Windows <code>System.Speech</code> fallback now runs through a bounded, tested core service with isolated PowerShell execution and temporary-file cleanup.</p>
+  <p><strong>Buyer value:</strong> the local voice fallback can be audited without exposing speech text, temporary paths, audio bytes, environment values or subprocess error details.</p>
+  <a class="btn" href="/api/acquisition/windows-speech-fallback-boundary">Windows Speech JSON</a>
+  <a class="btn" href="/api/acquisition/windows-speech-fallback-boundary/self-test">Windows Speech Self-Test</a>
+  <a class="btn" href="/api/acquisition/windows-speech-fallback-boundary/download">Download Windows Speech Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Owner Approval Persistence Boundary</h2>
+  <p>Buyer-safe evidence that explicit owner approvals are persisted through a bounded, atomic core service without exposing approval details.</p>
+  <a class="btn" href="/api/acquisition/owner-approval-persistence-boundary">Owner Approval JSON</a>
+  <a class="btn" href="/api/acquisition/owner-approval-persistence-boundary/self-test">Owner Approval Self-Test</a>
+  <a class="btn" href="/api/acquisition/owner-approval-persistence-boundary/download">Download Owner Approval Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Workflow Persistence Service Boundary</h2>
+  <p>Buyer-safe evidence for Adam's extracted, bounded and atomic workflow persistence service.</p>
+  <a class="btn" href="/api/acquisition/workflow-persistence-boundary">Workflow Persistence JSON</a>
+  <a class="btn" href="/api/acquisition/workflow-persistence-boundary/self-test">Workflow Persistence Self-Test</a>
+  <a class="btn" href="/api/acquisition/workflow-persistence-boundary/download">Download Workflow Persistence Boundary</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Audit Event Service Boundary</h2>
+  <p>Audit event construction and JSONL persistence now pass through tested <code>adam_core.audit_events</code> services while preserving existing operational audit callers.</p>
+  <p><strong>Buyer value:</strong> audit architecture can be verified without exposing audit-file contents, event-detail values, contacts, messages, credentials or private memory.</p>
+  <a class="btn" href="/api/acquisition/audit-event-boundary">Audit Event JSON</a>
+  <a class="btn" href="/api/acquisition/audit-event-boundary/self-test">Audit Event Self-Test</a>
+  <a class="btn" href="/api/acquisition/audit-event-boundary/download">Download Audit Event Boundary</a>
+</div>
+<section class="card"><h2>Approved Knowledge Answers — v4.5</h2><p>Meeting answers grounded only in owner-approved knowledge, with abstention when evidence is insufficient.</p><p><a class="btn" href="/meeting-knowledge">Open Approved Knowledge Control</a> <a class="btn" href="/api/acquisition/meeting-knowledge">Meeting Knowledge JSON</a> <a class="btn" href="/api/acquisition/meeting-knowledge/self-test">Meeting Knowledge Self-Test</a></p></section>
+<section class="card">
+  <h2 style="margin-top:0;">Acquisition Demo Hardening</h2>
+  <p>Buyer-safe contracts for Adam's three acquisition demos. Synthetic mode requires no live customer data or external execution.</p>
+  <a class="btn" href="/api/acquisition/demo-hardening">Demo Hardening JSON</a>
+  <a class="btn" href="/api/acquisition/demo-hardening/self-test">Demo Hardening Self-Test</a>
+</section>
+
+<div class="card">
+  <h2 style="margin-top:0;">Buyer Handoff / Acquisition Review</h2>
+  <p>RC1 buyer handoff evidence consolidates the acquisition-review components, review gates, known disclosures and buyer instructions without exposing credentials or personal data.</p>
+  <a class="btn" href="/api/acquisition/buyer-handoff">Buyer Handoff JSON</a>
+  <a class="btn" href="/api/acquisition/buyer-handoff/self-test">Buyer Handoff Self-Test</a>
+</div>
+
+<section class="card"><h2>Meeting Platform Adapter Foundation — v4.6</h2><p>Governed Teams, Zoom and Google Meet adapter contract with Owner Approval and AI identity. Real live joining remains disabled in this foundation.</p><p><a class="btn" href="/meeting-platform">Open Meeting Platform Control</a> <a class="btn" href="/api/acquisition/meeting-platform">Meeting Platform JSON</a> <a class="btn" href="/api/acquisition/meeting-platform/self-test">Meeting Platform Self-Test</a></p></section>
+<section class="card"><h2>Autonomous Meeting Attendance — v8.4.0</h2><p>Persistent attendance missions, standing owner pre-approval, Outlook meeting discovery, unattended scheduler, pre-meeting briefing and authority isolation. Real live platform join remains explicitly blocked until a tested meeting-platform adapter is connected.</p><p><a class="btn" href="/autonomous-meeting-attendance">Open Autonomous Meeting Attendance</a> <a class="btn" href="/api/personal-assistant/autonomous-meeting-attendance/status">Status JSON</a> <a class="btn" href="/api/personal-assistant/autonomous-meeting-attendance/self-test">Self-Test</a></p></section>
+<section class="card"><h2>Meeting Memory Foundation — v4.7</h2><p>Privacy-safe structured memory for meeting summaries, decisions and action items. Raw transcripts, meeting links and participant identity are excluded.</p><p><a class="btn" href="/meeting-memory">Open Meeting Memory Control</a> <a class="btn" href="/api/acquisition/meeting-memory">Meeting Memory JSON</a> <a class="btn" href="/api/acquisition/meeting-memory/self-test">Meeting Memory Self-Test</a></p></section>
+<section class="card"><h2>Post-Meeting Cross-App Follow-Up — v4.8</h2><p>Convert approved meeting outcomes into controlled follow-up actions across email, calendar, documents and WhatsApp.</p><p><strong>Safety:</strong> consequential Send, Invite, Upload and Submit actions remain Owner Approval gated. Acceptance mode uses synthetic adapters only.</p><p><a class="btn" href="/post-meeting-followup">Open Post-Meeting Follow-Up</a> <a class="btn" href="/api/acquisition/post-meeting-followup" target="_blank">Post-Meeting Follow-Up JSON</a> <a class="btn" href="/api/acquisition/post-meeting-followup/self-test" target="_blank">Post-Meeting Follow-Up Self-Test</a></p></section>
+</div>
+
+<section class="card"><h2>Buyer-Controlled Encrypted Meeting Memory — v4.9</h2><p>Add an injected encrypted persistence contract for structured meeting memory. Adam does not own or store encryption keys.</p><p><strong>Foundation:</strong> acceptance uses a synthetic adapter only; production cipher/KMS is buyer supplied.</p><p><a class="btn" href="/encrypted-meeting-memory">Open Encrypted Memory Control</a> <a class="btn" href="/api/acquisition/encrypted-meeting-memory" target="_blank">Encrypted Memory JSON</a> <a class="btn" href="/api/acquisition/encrypted-meeting-memory/self-test" target="_blank">Encrypted Memory Self-Test</a></p></section>
+
+<section class="card"><h2>Buyer-Ready Integrated Agent Demo — v5.0</h2><p>One buyer-facing synthetic demonstration unifying computer use, meetings, approved knowledge, meeting memory, cross-app execution, encrypted-memory architecture, Owner Approval, audit and follow-up.</p><p><strong>Safety:</strong> acceptance mode performs no real external execution.</p><p><a class="btn" href="/buyer-integrated-demo">Open Integrated Buyer Demo</a> <a class="btn" href="/api/acquisition/buyer-integrated-demo" target="_blank">Integrated Demo JSON</a> <a class="btn" href="/api/acquisition/buyer-integrated-demo/self-test" target="_blank">Integrated Demo Self-Test</a></p></section>
+
+<section class="card"><h2>Buyer-Controlled Production Connector Binding — v5.1</h2><p>Inject buyer/deployer-controlled transports for email, calendar, WhatsApp, meeting platforms and documents while keeping credentials outside Adam core and preserving Owner Approval.</p><p><strong>Foundation:</strong> acceptance mode is synthetic; live connectors are not configured by default.</p><p><a class="btn" href="/production-connector-binding">Open Connector Binding Control</a> <a class="btn" href="/api/acquisition/production-connector-binding" target="_blank">Connector Binding JSON</a> <a class="btn" href="/api/acquisition/production-connector-binding/self-test" target="_blank">Connector Binding Self-Test</a></p></section>
+
+<section class="card"><h2>Staging Connector Certification &amp; Deployment Readiness — v5.2.1</h2><p>Validate buyer-supplied staging connector configuration, transport readiness, least-privilege scope, Owner Approval and privacy boundaries before production enablement.</p><p><strong>Staging only:</strong> certification does not enable live production execution and uses no bundled production credentials.</p><p><a class="btn" href="/staging-connector-certification">Open Staging Certification Control</a> <a class="btn" href="/api/acquisition/staging-connector-certification" target="_blank">Staging Certification JSON</a> <a class="btn" href="/api/acquisition/staging-connector-certification/self-test" target="_blank">Staging Certification Self-Test</a></p></section>
+
+<section class="card"><h2>Production Activation Gate — v5.3</h2><p>Authorize buyer-controlled production cutover only after staging certification, security review, least-privilege verification, rollback readiness, audit logging, and explicit Owner Approval.</p><p><strong>Authorization only:</strong> acceptance mode never enables live execution or performs a real external action.</p><p><a class="btn" href="/production-activation-gate">Open Production Activation Gate</a> <a class="btn" href="/api/acquisition/production-activation-gate" target="_blank">Activation Gate JSON</a> <a class="btn" href="/api/acquisition/production-activation-gate/self-test" target="_blank">Activation Gate Self-Test</a></p></section>
+
+<section class="card"><h2>Post-Deployment Monitoring & Safety Watch — v5.4</h2><p>Monitor deployment health, connector status, audit pipeline and privacy boundary after production authorization.</p><p><strong>Safety:</strong> Adam may detect a failure and recommend rollback, but no consequential response can run without explicit Owner Approval. Acceptance mode is synthetic only.</p><p><a class="btn" href="/post-deployment-monitoring">Open Monitoring & Safety Watch</a> <a class="btn" href="/api/acquisition/post-deployment-monitoring" target="_blank">Monitoring JSON</a> <a class="btn" href="/api/acquisition/post-deployment-monitoring/self-test" target="_blank">Monitoring Self-Test</a></p></section>
+
+<section class="card"><h2>Incident Response Certification &amp; Recovery Drill — v5.5</h2><p>Certify incident readiness after a monitoring alert using buyer-controlled containment and recovery authorization, with audit capture and rollback-path checks.</p><p><strong>Safety:</strong> incomplete readiness or missing Owner Approval blocks the response. Acceptance mode is synthetic and performs no real containment or rollback.</p><p><a class="btn" href="/incident-response-certification">Open Incident Response Certification</a> <a class="btn" href="/api/acquisition/incident-response-certification" target="_blank">Incident Response JSON</a> <a class="btn" href="/api/acquisition/incident-response-certification/self-test" target="_blank">Incident Response Self-Test</a></p></section>
+
+<section class="card"><h2>Buyer Observability &amp; Production Evidence — v5.6</h2><p>Build buyer-safe operational evidence from health, audit, approval, privacy-boundary and incident-state signals without exposing customer payload values.</p><p><strong>Safety:</strong> evidence export authorization requires Owner Approval. Acceptance mode is synthetic and contacts no live observability or customer system.</p><p><a class="btn" href="/buyer-observability-evidence">Open Observability Evidence</a> <a class="btn" href="/api/acquisition/buyer-observability-evidence" target="_blank">Observability JSON</a> <a class="btn" href="/api/acquisition/buyer-observability-evidence/self-test" target="_blank">Observability Self-Test</a></p></section>
+
+<section class="card"><h2>Enterprise Security &amp; Deployment Hardening — v5.7</h2><p>Validate enterprise deployment security across externalized secrets, least privilege, transport security, audit logging, rollback readiness and data-retention policy.</p><p><strong>Safety:</strong> hardened deployment authorization requires Owner Approval. Acceptance mode is synthetic and performs no real deployment or production cutover.</p><p><a class="btn" href="/enterprise-security-hardening">Open Security Hardening</a> <a class="btn" href="/api/acquisition/enterprise-security-hardening" target="_blank">Security Hardening JSON</a> <a class="btn" href="/api/acquisition/enterprise-security-hardening/self-test" target="_blank">Security Hardening Self-Test</a></p></section>
+
+<section class="card"><h2>Final Acquisition Release Candidate &amp; Buyer Demo Certification — v5.8</h2><p>Certify the final acquisition release candidate across locked acceptance evidence, buyer-demo flow, enterprise security, privacy boundaries, deployment safety and buyer handoff readiness.</p><p><strong>Safety:</strong> final release authorization requires Owner Approval. Acceptance mode is synthetic and performs no real buyer handoff or production deployment.</p><p><a class="btn" href="/final-acquisition-certification">Open Final Certification</a> <a class="btn" href="/api/acquisition/final-acquisition-certification" target="_blank">Final Certification JSON</a> <a class="btn" href="/api/acquisition/final-acquisition-certification/self-test" target="_blank">Final Certification Self-Test</a></p></section>
+
+<section class="card"><h2>Personal Production Assistant Integration — v5.9</h2><p>Dual-use operating profile for daily owner use while preserving buyer-safe governance, privacy boundaries and Owner Approval.</p><p><a class="btn" href="/personal-assistant-readiness">Open Personal Assistant Readiness</a> <a class="btn" href="/api/personal-assistant/readiness" target="_blank">Readiness JSON</a> <a class="btn" href="/api/personal-assistant/readiness/self-test" target="_blank">Readiness Self-Test</a></p></section>
+
+<section class="card"><h2>Microsoft / Outlook Live Execution Binding — v6.2</h2><p>Bind owner-reviewed Email and Calendar actions to the existing Microsoft connectors with two explicit gates: Owner Approval and Live Execute.</p><p><strong>Safety:</strong> acceptance testing keeps Live Execute OFF. The boundary self-test uses synthetic adapters only and performs no real external action.</p><p><a class="btn" href="/microsoft-live-execution">Open Microsoft Live Execution</a> <a class="btn" href="/api/personal-assistant/microsoft-live-execution/self-test" target="_blank">Live Execution Self-Test</a></p></section>
+
+
+<section class="card"><h2>Persistent Personal Context & Memory — v6.4</h2><p>Remember owner-approved preferences, contact/project context and follow-ups while rejecting credential-like secrets.</p><p><strong>Safety:</strong> writes require Owner Approval; recall is read-only and local.</p><p><a class="btn" href="/personal-context-memory">Open Personal Context & Memory</a> <a class="btn" href="/api/personal-assistant/context-memory/self-test" target="_blank">Memory Self-Test</a></p></section>
+<section class="card"><h2>Unified Daily Briefing — v6.3</h2><p>Combine Calendar, priority communications, follow-ups, documents and tasks into one privacy-safe read-only workday briefing.</p><p><strong>Safety:</strong> briefing generation performs no consequential action and no external network access.</p><p><a class="btn" href="/unified-daily-briefing">Open Unified Daily Briefing</a> <a class="btn" href="/api/personal-assistant/unified-daily-briefing/self-test" target="_blank">Briefing Self-Test</a></p></section>
+
+<section class="card"><h2>Voice-First Adam — v6.5</h2><p>Conversational voice planning and multilingual Adam 2+4 identity with visible text confirmation for consequential actions.</p><p><strong>Safety:</strong> voice never bypasses Owner Approval or text confirmation.</p><p><a class="btn" href="/voice-first-adam">Open Voice-First Adam</a> <a class="btn" href="/api/personal-assistant/voice-first/self-test" target="_blank">Voice-First Self-Test</a></p></section>
+
+<section class="card"><h2>Camera, Vision &amp; Attachment Operator — v6.6</h2><p>Use live camera frames, images and documents to build governed Adam workflows while preserving natural left/right camera orientation.</p><p><strong>Safety:</strong> consequential handoff requires Owner Approval; this boundary performs no external action.</p><p><a class="btn" href="/camera-vision-attachment-operator">Open Camera, Vision &amp; Attachment Operator</a> <a class="btn" href="/api/personal-assistant/camera-vision-attachment/self-test" target="_blank">Camera/Vision Self-Test</a></p></section>
+<section class="card"><h2>Browser/Computer Operator — v6.7</h2><p>Screen-aware browser/computer task planning with adaptive recovery, audit evidence and governed handoff to Adam's existing live-browser driver.</p><p><strong>Safety:</strong> consequential actions require Owner Approval; acceptance mode performs no live action.</p><p><a class="btn" href="/browser-computer-operator">Open Browser/Computer Operator</a> <a class="btn" href="/api/personal-assistant/browser-computer-operator/self-test" target="_blank">Browser/Computer Self-Test</a></p></section>
+
+<section class="card"><h2>WhatsApp Production Integration — v6.8</h2><p>Bind owner-reviewed WhatsApp actions to Adam's existing WhatsApp Cloud transport with separate Owner Approval and Live Execute gates.</p><p><strong>Safety:</strong> acceptance mode uses synthetic inputs and sends no real WhatsApp message.</p><p><a class="btn" href="/whatsapp-production-integration">Open WhatsApp Production Integration</a> <a class="btn" href="/api/personal-assistant/whatsapp-production/self-test" target="_blank">WhatsApp Production Self-Test</a></p></section>
+
+
+<section class="card"><h2>Stock Intelligence Assistant — v6.9</h2><p>Read-only market and portfolio intelligence with SMA/RSI analysis and governed trade-intent handoff.</p><p><strong>Safety:</strong> this boundary never submits an order; live trading remains blocked and buy/sell handoff requires Owner Approval.</p><p><a class="btn" href="/stock-intelligence-assistant">Open Stock Intelligence Assistant</a> <a class="btn" href="/api/personal-assistant/stock-intelligence/self-test" target="_blank">Stock Intelligence Self-Test</a></p></section>
+
+<section class="card"><h2>Unified Adam Operator — v7.0</h2><p>One governed operator surface combining daily briefing, memory, voice, vision/attachments, browser/computer control, communications and stock intelligence.</p><p><strong>Safety:</strong> consequential actions require Owner Approval and text confirmation; real execution remains inside existing governed specialist boundaries and live stock trading remains blocked.</p><p><a class="btn" href="/unified-adam-operator">Open Unified Adam Operator</a> <a class="btn" href="/api/personal-assistant/unified-operator/self-test" target="_blank">Unified Operator Self-Test</a></p></section>
+
+<section class="card"><h2>Stock Notification Stability — v7.0.1</h2><p>Stops repeated stock voice updates by default and gives the owner explicit notification modes: Once per signal, Status changes only, Every check, or Off.</p><p><strong>Default:</strong> a new important stock signal is announced once. Temporary no-alert cycles do not re-arm the same signal; automatic dashboard refresh remains silent unless the owner explicitly enables repeated alerts.</p><p><a class="btn" href="/stock">Open Stock Controls</a> <a class="btn" href="/api/personal-assistant/stock-notifications/self-test" target="_blank">Stock Notification Self-Test</a></p></section>
+<section class="card"><h2>Secure Guest Voice Conversation — v8.1.0</h2><p>Create an owner-approved, temporary link so another person can speak with Adam from a second browser or device. Continuous listening waits through natural pauses and resumes after Adam replies.</p><p><strong>Safety:</strong> guest sessions are ephemeral and topic-bounded; owner private data and external actions remain unavailable.</p><p><a class="btn" href="/guest-voice">Open Guest Voice</a> <a class="btn" href="/api/personal-assistant/guest-voice/self-test" target="_blank">Guest Voice Self-Test</a></p></section>
+</body>
+</html>
+

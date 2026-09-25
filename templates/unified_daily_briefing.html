@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Adam {{ version }} — Unified Daily Briefing</title>
+<style>body{font-family:Arial,sans-serif;background:#f4f7fb;margin:0;padding:24px;color:#111}.wrap{max-width:980px;margin:auto}.card{background:#fff;border:1px solid #dbe2ea;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}button{background:#10233d;color:#fff;border:0;border-radius:5px;padding:9px 13px;font-weight:700;cursor:pointer}textarea{width:100%;min-height:235px;box-sizing:border-box;font-family:Consolas,monospace;font-size:13px;padding:10px}pre{white-space:pre-wrap;background:#f7f9fc;border-radius:8px;padding:12px;overflow:auto}.hint{font-size:13px;color:#334155}</style></head>
+<body><div class="wrap"><div class="card"><h2>Adam {{ version }} — Unified Daily Briefing</h2><p>Combine Calendar, priority communications, follow-ups, documents and tasks into one read-only workday briefing. This screen does not send or execute anything.</p>
+<textarea id="payload">{
+  "calendar": [{"time":"09:30","title":"Site coordination meeting","with":"Project team"}],
+  "priority_messages": [{"from":"Contractor","subject":"Latest payment letter","reason":"Needs reply"}],
+  "followups": [{"title":"Confirm latest payment letter","due":"Today","contact":"Contractor"}],
+  "documents": [{"name":"Payment letter","status":"Draft","next_action":"Review"}],
+  "tasks": [{"title":"Prepare contractor response","priority":"High","due":"Today"}]
+}</textarea>
+<p><button onclick="buildBriefing()">Generate Briefing</button> <button onclick="location.href='/acquisition'">Acquisition Center</button></p><p class="hint">Acceptance example is already loaded. Click Generate Briefing and send the result screenshot.</p></div>
+<div class="card"><h3>Briefing Result</h3><pre id="result">Ready.</pre></div></div>
+<script>async function buildBriefing(){const r=document.getElementById('result');try{const payload=JSON.parse(document.getElementById('payload').value);const res=await fetch('/api/personal-assistant/unified-daily-briefing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await res.json();r.textContent=JSON.stringify(j,null,2)}catch(e){r.textContent=String(e)}}</script></body></html>

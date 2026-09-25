@@ -1,0 +1,21 @@
+Adam Acquisition v8.4.1.12 verification
+
+NEW TARGETED TESTS
+- 10/10 v8.4.1.12 fast-AI latency tests: PASS
+- Fast factual Responses payload: 160 max_output_tokens + minimal reasoning: PASS
+
+PRESERVATION CHECKS
+- 15/15 prior v8.4.1.11 / v8.4.1.11.1 / v8.4.1.11.2 non-version regression checks: PASS
+- Fast end-turn 2400 ms preserved: PASS
+- Protected natural-pause 4200 ms preserved: PASS
+- Instant factual voice preserved: PASS
+- Total voice-start timestamp freeze preserved: PASS
+- New-utterance end-turn timestamp reset preserved: PASS
+
+SYNTAX / PACKAGE
+- Python compile app.py + ai_provider_transport.py: PASS
+- Meeting page JavaScript syntax: PASS
+- ZIP integrity: pending package creation
+
+NOTE
+Physical latency depends on network/provider response time. This upgrade reduces request/prompt/reasoning overhead on the existing narrow factual path; it does not alter governed meeting decisions.

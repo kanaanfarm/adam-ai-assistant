@@ -1,0 +1,13 @@
+Adam Acquisition v8.4.0.4 verification
+
+Targeted new long-answer meeting voice tests: 9 PASS
+Preserved correction-isolation tests (excluding obsolete exact-version assertion): 4 PASS
+Preserved no-silent-turn tests (excluding obsolete exact-version assertion): 3 PASS
+Preserved typed-meeting-query tests (excluding obsolete exact-version assertion): 5 PASS
+Preserved conversational interaction tests (excluding obsolete exact-version assertion): 4 PASS
+Python compile: PASS
+Real Meeting Attendance JavaScript syntax (node --check): PASS
+
+Notes:
+- Older release tests that assert an exact previous VERSION string are intentionally not counted as behavioral failures.
+- The physical Windows/browser speaker test cannot be executed in this container and still requires user confirmation.

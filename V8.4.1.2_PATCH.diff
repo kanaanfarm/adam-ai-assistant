@@ -1,0 +1,829 @@
+--- /mnt/data/adam8411/app.py	2026-09-09 13:03:54.000000000 +0000
++++ /mnt/data/adam8412/app.py	2026-09-09 20:41:23.943472682 +0000
+@@ -188,7 +188,7 @@
+ from adam_core.meeting_language_policy import DEFAULT_REPLY_LANGUAGE, detect_requested_reply_language, tts_locale_for_reply, professional_scope_prompt
+ from adam_core.meeting_focus_engine import evaluate_meeting_focus, detect_explicit_project_mismatch, self_test as meeting_focus_self_test
+ 
+-VERSION = "v8.4.1.1"
++VERSION = "v8.4.1.2"
+ BASELINE_VERSION = "v0.8.0.1"
+ BUILD_CHANNEL = "acquisition"
+ 
+@@ -633,14 +633,14 @@
+     return core_windows_speech_synthesize(text=text, os_name=os.name, runner=subprocess.run, timeout=90)
+ 
+ 
+-def call_ai(prompt, language="English", max_tokens=1200):
++def call_ai(prompt, language="English", max_tokens=1200, timeout=60):
+     """Shared text-AI helper delegated to the extracted provider transport."""
+     saved = load_ai_settings()
+     runtime_ai = core_runtime_openai_environment()
+     api_key = saved.get("api_key", "") or runtime_ai["api_key"]
+     api_base = (saved.get("api_base", "") or runtime_ai["api_base"]).rstrip("/")
+     model = saved.get("model", "") or runtime_ai["model"]
+-    return core_ai_complete_text(api_base, api_key, model, prompt, language, MASTER_PROMPT, http=requests, max_tokens=max_tokens)
++    return core_ai_complete_text(api_base, api_key, model, prompt, language, MASTER_PROMPT, http=requests, max_tokens=max_tokens, timeout=timeout)
+ 
+ def call_ai_advanced(prompt, language="English", max_tokens=1600, allow_web=False):
+     """v8.2: stronger reasoning with optional live public web research.
+@@ -7257,11 +7257,76 @@
+ # is counted only as metadata; raw rejected speech is deliberately not retained here.
+ _MEETING_FOCUS_HISTORY = {}
+ _MEETING_FOCUS_HISTORY_MAX_ITEMS = 120
++# v8.4.1.2 — accepted-turn persistence + single-flight pairing.
++# Once Meeting Focus accepts a turn, it is immediately represented in formal
++# ephemeral meeting memory and cannot later be counted as background simply
++# because the AI provider is still processing. Duplicate browser/STT dispatches
++# are collapsed to one question/answer pair.
++_MEETING_ACCEPTED_TURNS = {}
++_MEETING_ACCEPTED_TURNS_MAX_ITEMS = 160
++_MEETING_AI_INFLIGHT = set()
++_MEETING_AI_INFLIGHT_LOCK = threading.RLock()
+ 
+ def _meeting_question_coverage_session(session_id):
+     sid = str(session_id or "").strip() or uuid.uuid4().hex
+     return sid, _MEETING_QUESTION_COVERAGE.setdefault(sid, [])
+ 
++def _meeting_accepted_turn_session(session_id):
++    sid = str(session_id or "").strip() or uuid.uuid4().hex
++    return sid, _MEETING_ACCEPTED_TURNS.setdefault(sid, [])
++
++def _meeting_normalized_text(text):
++    return re.sub(r"[\W_]+", " ", str(text or "").lower(), flags=re.UNICODE).strip()
++
++def _meeting_accepted_turn_upsert(records, *, question_id, text="", focus_status="accepted",
++                                  ai_status="", direct_question=False, reply="", topic="",
++                                  discussion_status=""):
++    qid = str(question_id or "").strip()[:120] or uuid.uuid4().hex
++    rec = next((x for x in records if str(x.get("question_id") or "") == qid), None)
++    if rec is None:
++        rec = {
++            "question_id": qid,
++            "text": str(text or "").strip()[:4000] if str(focus_status) == "accepted" else "",
++            "normalized_text": _meeting_normalized_text(text)[:1000] if str(focus_status) == "accepted" else "",
++            "focus_status": str(focus_status or "accepted")[:40],
++            "formal_memory": bool(str(focus_status) == "accepted"),
++            "created_at": datetime.now(timezone.utc).isoformat(),
++        }
++        records.append(rec)
++    if rec.get("focus_status") != "accepted":
++        rec["focus_status"] = str(focus_status or rec.get("focus_status") or "")[:40]
++    if str(focus_status) == "accepted":
++        rec["focus_status"] = "accepted"
++        rec["formal_memory"] = True
++        if text:
++            rec["text"] = str(text).strip()[:4000]
++            rec["normalized_text"] = _meeting_normalized_text(text)[:1000]
++    if ai_status:
++        incoming_ai_status = str(ai_status)[:60]
++        current_ai_status = str(rec.get("ai_status") or "")
++        final_ai_statuses = {"answered", "clarification", "ignored"}
++        # State is monotonic for normal note/focus callbacks: a delayed transcript
++        # note must never regress Processing or a completed answer back to Accepted.
++        # Error states remain retryable, so a later Processing update may replace them.
++        if incoming_ai_status == "accepted" and current_ai_status and current_ai_status != "accepted":
++            pass
++        elif incoming_ai_status == "processing" and current_ai_status in final_ai_statuses | {"provider_response_received"}:
++            pass
++        else:
++            rec["ai_status"] = incoming_ai_status
++    if direct_question:
++        rec["direct_question"] = True
++    if reply:
++        rec["reply"] = str(reply).strip()[:8000]
++    if topic:
++        rec["topic"] = str(topic).strip()[:200]
++    if discussion_status:
++        rec["discussion_status"] = str(discussion_status).strip()[:100]
++    rec["updated_at"] = datetime.now(timezone.utc).isoformat()
++    if len(records) > _MEETING_ACCEPTED_TURNS_MAX_ITEMS:
++        del records[:-_MEETING_ACCEPTED_TURNS_MAX_ITEMS]
++    return qid, rec
++
+ def _meeting_strip_wake_prefix(text):
+     q = re.sub(r"\s+", " ", str(text or "").strip())
+     return re.sub(r"^(?:adam|آدم|ادم|ادام)\b[\s,.:;!?؟-]*", "", q, flags=re.I).strip()
+@@ -7299,22 +7364,58 @@
+     ))
+ 
+ def _meeting_coverage_upsert(records, *, question_id, question, direct_question, state, answer="", topic=""):
+-    qid = str(question_id or "").strip()[:120] or uuid.uuid4().hex
++    incoming_qid = str(question_id or "").strip()[:120]
++    qid = incoming_qid or uuid.uuid4().hex
+     rec = next((x for x in records if str(x.get("question_id") or "") == qid), None)
++    normalized = _meeting_normalized_text(question)
++    now = datetime.now(timezone.utc)
++
++    if rec is None and str(state or "") == "Processing" and normalized:
++        for candidate in reversed(records[-20:]):
++            if str(candidate.get("state") or "") != "Processing":
++                continue
++            if str(candidate.get("normalized_question") or "") != normalized:
++                continue
++            try:
++                created = datetime.fromisoformat(str(candidate.get("created_at") or ""))
++                if created.tzinfo is None:
++                    created = created.replace(tzinfo=timezone.utc)
++                if (now - created).total_seconds() <= 30:
++                    rec = candidate
++                    qid = str(candidate.get("question_id") or qid)
++                    break
++            except Exception:
++                continue
++
+     if rec is None:
+-        rec = {"question_id": qid, "question": str(question or "").strip()[:4000], "direct_question": bool(direct_question)}
++        rec = {
++            "question_id": qid,
++            "question": str(question or "").strip()[:4000],
++            "direct_question": bool(direct_question),
++            "normalized_question": normalized[:1000],
++            "created_at": now.isoformat(),
++        }
+         records.append(rec)
++
++    previous_state = str(rec.get("state") or "")
++    next_state = str(state or "Pending")[:80]
++    if next_state == "Processing" and previous_state and previous_state != "Processing":
++        next_state = previous_state
++
+     rec.update({
+         "question": str(question or rec.get("question") or "").strip()[:4000],
+         "direct_question": bool(direct_question or rec.get("direct_question")),
+-        "state": str(state or "Pending")[:80],
+-        "answer": str(answer or "").strip()[:8000],
++        "normalized_question": normalized[:1000] or str(rec.get("normalized_question") or "")[:1000],
++        "state": next_state,
++        "answer": (str(answer or "").strip()[:8000] if answer or next_state == "Processing" else str(rec.get("answer") or "")[:8000]),
+         "topic": str(topic or rec.get("topic") or "").strip()[:200],
++        "updated_at": now.isoformat(),
+     })
+     if len(records) > _MEETING_QUESTION_COVERAGE_MAX_ITEMS:
+         del records[:-_MEETING_QUESTION_COVERAGE_MAX_ITEMS]
+     return qid, rec
+ 
++
+ _CONTEXTUAL_FOLLOWUP_RE = re.compile(
+     r"^(?:adam[,:]?\s*)?(?:and\s+)?(?:"
+     r"why(?:\s+is\s+that)?|what\s+do\s+you\s+think|what\s+can\s+we\s+do|"
+@@ -7491,8 +7592,51 @@
+         return jsonify({"ok": False, "status": "text_required", "version": VERSION}), 400
+ 
+     sid = str(body.get("session_id") or "").strip() or uuid.uuid4().hex
++    question_id = str(body.get("question_id") or body.get("utterance_id") or "").strip()[:120] or uuid.uuid4().hex
+     _, memory = _meeting_transcript_session(sid)
+     _, discussion_records = _meeting_discussion_session(sid)
++    _, accepted_turns = _meeting_accepted_turn_session(sid)
++
++    # v8.4.1.2 — acceptance is sticky for a stable utterance id. This prevents
++    # a duplicate STT/browser callback from re-running focus classification and
++    # later appearing as background after the turn was already accepted.
++    existing_turn = next((x for x in accepted_turns if str(x.get("question_id") or "") == question_id and x.get("focus_status") == "accepted"), None)
++    # Also collapse the same completed STT text when a browser callback arrives with
++    # a different generated id. This is intentionally a short window: legitimate
++    # repeated questions later in the meeting must still be accepted as new turns.
++    if existing_turn is None:
++        normalized_incoming = _meeting_normalized_text(text)
++        now = datetime.now(timezone.utc)
++        for candidate in reversed(accepted_turns[-20:]):
++            if candidate.get("focus_status") != "accepted":
++                continue
++            if not normalized_incoming or str(candidate.get("normalized_text") or "") != normalized_incoming:
++                continue
++            try:
++                stamp = datetime.fromisoformat(str(candidate.get("created_at") or candidate.get("updated_at") or ""))
++                if stamp.tzinfo is None:
++                    stamp = stamp.replace(tzinfo=timezone.utc)
++                if (now - stamp).total_seconds() <= 12:
++                    existing_turn = candidate
++                    question_id = str(candidate.get("question_id") or question_id)
++                    break
++            except Exception:
++                continue
++    if existing_turn is not None:
++        hist = _MEETING_FOCUS_HISTORY.setdefault(sid, {"accepted": 0, "rejected": 0, "events": []})
++        return jsonify({
++            "ok": True, "status": "meeting_focus_accepted", "session_id": sid,
++            "question_id": question_id, "accept": True, "decision": "accept",
++            "reason": "duplicate accepted turn — prior focus decision retained",
++            "score": 1.0, "threshold": 0.0,
++            "accepted_count": max(int(hist.get("accepted") or 0), len(accepted_turns)),
++            "rejected_count": int(hist.get("rejected") or 0),
++            "formal_record_action": "accepted_into_meeting_pipeline",
++            "accepted_turn_persisted": True, "duplicate_focus_suppressed": True,
++            "owner_gate_preserved": True, "external_action_executed": False,
++            "version": VERSION,
++        })
++
+     recent_context = "\n".join(memory[-30:])[-10000:]
+     immediate_thread_available = bool(discussion_records)
+ 
+@@ -7524,6 +7668,16 @@
+     hist = _MEETING_FOCUS_HISTORY.setdefault(sid, {"accepted": 0, "rejected": 0, "events": []})
+     if result.get("accept"):
+         hist["accepted"] = int(hist.get("accepted") or 0) + 1
++        # Persist accepted speech immediately, before AI dispatch. This is the
++        # authoritative formal meeting-memory boundary for the turn.
++        entry = text[:6000]
++        if not memory or memory[-1] != entry:
++            memory.append(entry)
++            _meeting_transcript_trim(memory)
++        _meeting_accepted_turn_upsert(
++            accepted_turns, question_id=question_id, text=text,
++            focus_status="accepted", ai_status="accepted"
++        )
+     else:
+         hist["rejected"] = int(hist.get("rejected") or 0) + 1
+     event = {
+@@ -7552,10 +7706,12 @@
+         "ok": True,
+         "status": "meeting_focus_accepted" if result.get("accept") else "meeting_background_filtered",
+         "session_id": sid,
++        "question_id": question_id,
+         **result,
+         "accepted_count": int(hist.get("accepted") or 0),
+         "rejected_count": int(hist.get("rejected") or 0),
+         "formal_record_action": "accepted_into_meeting_pipeline" if result.get("accept") else "filtered_before_meeting_memory",
++        "accepted_turn_persisted": bool(result.get("accept")),
+         "focus_history": hist.get("events", [])[-20:],
+         "meeting_focus_lock_supported": True,
+         "participant_roster_context_supported": True,
+@@ -7576,13 +7732,20 @@
+     if not text:
+         return jsonify({"ok": False, "status": "text_required", "version": VERSION}), 400
+     sid, memory = _meeting_transcript_session(body.get("session_id"))
++    question_id = str(body.get("question_id") or body.get("utterance_id") or "").strip()[:120] or uuid.uuid4().hex
+     entry = text[:6000]
+     if not memory or memory[-1] != entry:
+         memory.append(entry)
+         _meeting_transcript_trim(memory)
++    _, accepted_turns = _meeting_accepted_turn_session(sid)
++    _meeting_accepted_turn_upsert(
++        accepted_turns, question_id=question_id, text=text,
++        focus_status="accepted", ai_status="accepted"
++    )
+     return jsonify({
+         "ok": True, "status": "meeting_utterance_remembered", "session_id": sid,
+-        "remembered_items": len(memory), "ephemeral_meeting_memory": True,
++        "question_id": question_id, "remembered_items": len(memory),
++        "accepted_turn_persisted": True, "ephemeral_meeting_memory": True,
+         "owner_gate_preserved": True, "version": VERSION,
+     })
+ 
+@@ -7633,16 +7796,52 @@
+     session_id, server_history = _meeting_conversation_session(body.get("session_id"))
+     _, transcript_memory = _meeting_transcript_session(session_id)
+     _, coverage_records = _meeting_question_coverage_session(session_id)
+-    question_id = str(body.get("question_id") or "").strip()[:120]
++    _, accepted_turns = _meeting_accepted_turn_session(session_id)
++    requested_question_id = str(body.get("question_id") or "").strip()[:120]
+     direct_question = bool(body.get("direct_question")) or _meeting_question_is_direct(question)
+     turn_kind = str(body.get("turn_kind") or ("question" if direct_question else "statement")).strip().lower()[:40]
+     if turn_kind not in {"question", "correction", "order", "addressed_comment", "statement"}:
+         turn_kind = "statement"
+     response_required = bool(body.get("response_required")) or direct_question or turn_kind in {"correction", "order", "addressed_comment"}
+-    question_id, _ = _meeting_coverage_upsert(
+-        coverage_records, question_id=question_id, question=question,
++    question_id, coverage_rec = _meeting_coverage_upsert(
++        coverage_records, question_id=requested_question_id, question=question,
+         direct_question=direct_question, state="Processing"
+     )
++    existing_coverage_state = str(coverage_rec.get("state") or "")
++    existing_accepted_turn = next((x for x in accepted_turns if str(x.get("question_id") or "") == question_id), None)
++    existing_ai_status = str((existing_accepted_turn or {}).get("ai_status") or "")
++    # A delayed duplicate callback can arrive after the original provider returned
++    # or after the paired answer completed. Keep that original turn authoritative
++    # and never launch another provider call. Failed/unanswered turns remain retryable.
++    if requested_question_id and question_id == requested_question_id and (
++        existing_coverage_state.startswith("Answered")
++        or existing_coverage_state == "Clarification requested"
++        or existing_coverage_state.startswith("Ignored")
++        or existing_ai_status in {"provider_response_received", "answered", "clarification", "ignored"}
++    ):
++        return jsonify({
++            "ok": False, "status": "duplicate_turn_completed",
++            "duplicate_suppressed": True, "canonical_question_id": question_id,
++            "question_id": question_id, "question_coverage": coverage_records[-80:],
++            "accepted_turn_persisted": True, "owner_gate_preserved": True,
++            "external_action_executed": False, "version": VERSION,
++        }), 409
++    _meeting_accepted_turn_upsert(
++        accepted_turns, question_id=question_id, text=question,
++        focus_status="accepted", ai_status="processing", direct_question=direct_question
++    )
++
++    # Two different client ids for the same normalized turn can arrive while
++    # the first AI call is still Processing. Reuse the earlier canonical id and
++    # stop the duplicate before a second provider call is launched.
++    if requested_question_id and question_id != requested_question_id and str(coverage_rec.get("state") or "") == "Processing":
++        return jsonify({
++            "ok": False, "status": "duplicate_turn_in_progress",
++            "duplicate_suppressed": True, "canonical_question_id": question_id,
++            "question_id": question_id, "question_coverage": coverage_records[-80:],
++            "accepted_turn_persisted": True, "owner_gate_preserved": True,
++            "external_action_executed": False, "version": VERSION,
++        }), 409
+ 
+     # v8.3.1.4: visible transcript clearing is a UI action only. The live meeting
+     # session keeps an ephemeral server-side transcript memory until End Meeting /
+@@ -7759,21 +7958,55 @@
+         "\n\nRecent meeting conversation:\n" + ("\n".join(history_lines) or "(none yet)") +
+         "\n\nParticipant interaction:\n" + question
+     )
+-    try:
+-        raw_answer = call_ai(prompt, reply_language, max_tokens=700).strip()
++    flight_key = (session_id, question_id)
++    with _MEETING_AI_INFLIGHT_LOCK:
++        if flight_key in _MEETING_AI_INFLIGHT:
++            return jsonify({
++                "ok": False, "status": "duplicate_turn_in_progress",
++                "duplicate_suppressed": True, "canonical_question_id": question_id,
++                "question_id": question_id, "question_coverage": coverage_records[-80:],
++                "accepted_turn_persisted": True, "owner_gate_preserved": True,
++                "external_action_executed": False, "version": VERSION,
++            }), 409
++        _MEETING_AI_INFLIGHT.add(flight_key)
++    try:
++        raw_answer = call_ai(prompt, reply_language, max_tokens=700, timeout=25).strip()
++        if raw_answer:
++            _meeting_accepted_turn_upsert(
++                accepted_turns, question_id=question_id, text=question, focus_status="accepted",
++                ai_status="provider_response_received", direct_question=direct_question
++            )
+     except Exception as exc:
+-        _meeting_coverage_upsert(coverage_records, question_id=question_id, question=question, direct_question=direct_question, state="Unanswered — AI provider error")
++        exc_name = type(exc).__name__.lower()
++        exc_text = str(exc).lower()
++        provider_timeout = "timeout" in exc_name or "timed out" in exc_text
++        failure_state = "Unanswered — AI provider timeout" if provider_timeout else "Unanswered — AI provider error"
++        failure_status = "ai_provider_timeout" if provider_timeout else "ai_provider_error"
++        _meeting_coverage_upsert(coverage_records, question_id=question_id, question=question, direct_question=direct_question, state=failure_state)
++        _meeting_accepted_turn_upsert(
++            accepted_turns, question_id=question_id, text=question, focus_status="accepted",
++            ai_status=("provider_timeout" if provider_timeout else "provider_error"), direct_question=direct_question
++        )
+         return jsonify({
+             "ok": False,
+-            "status": "ai_provider_error",
++            "status": failure_status,
+             "error": str(exc),
+             "question_id": question_id,
+             "question_coverage": coverage_records[-80:],
++            "accepted_turn_persisted": True,
++            "provider_timeout_seconds": 25,
+             "version": VERSION,
+-        }), 400
++        }), (504 if provider_timeout else 400)
++    finally:
++        with _MEETING_AI_INFLIGHT_LOCK:
++            _MEETING_AI_INFLIGHT.discard(flight_key)
+     if not raw_answer:
+         _meeting_coverage_upsert(coverage_records, question_id=question_id, question=question, direct_question=direct_question, state="Unanswered — empty AI response")
+-        return jsonify({"ok": False, "status": "empty_ai_response", "question_id": question_id, "question_coverage": coverage_records[-80:], "version": VERSION}), 502
++        _meeting_accepted_turn_upsert(
++            accepted_turns, question_id=question_id, text=question, focus_status="accepted",
++            ai_status="empty_response", direct_question=direct_question
++        )
++        return jsonify({"ok": False, "status": "empty_ai_response", "question_id": question_id, "question_coverage": coverage_records[-80:], "accepted_turn_persisted": True, "version": VERSION}), 502
+ 
+     clarification_requested = False
+     ignore_requested = False
+@@ -7868,14 +8101,26 @@
+         coverage_records, question_id=question_id, question=question, direct_question=direct_question,
+         state=coverage_state, answer=answer, topic=discussion_topic
+     )
++    _meeting_accepted_turn_upsert(
++        accepted_turns, question_id=question_id, text=question, focus_status="accepted",
++        ai_status=("clarification" if clarification_requested else ("ignored" if ignore_requested else "answered")),
++        direct_question=direct_question, reply=answer, topic=discussion_topic,
++        discussion_status=discussion_status
++    )
+     discussion_record_number = None
+     if not ignore_requested:
+-        discussion_records.append({"question": question[:4000], "answer": answer[:8000], "topic": discussion_topic, "status": discussion_status, "followup": bool(followup_priority), "clarification": bool(clarification_requested), "participation_style": participation_style, "proactive_reason": proactive_reason, **register})
+-        _meeting_discussion_trim(discussion_records)
+-        discussion_record_number = len(discussion_records)
+-        server_history.append({"role": "user", "content": question[:4000]})
+-        server_history.append({"role": "assistant", "content": answer[:8000]})
+-        _meeting_conversation_trim(server_history)
++        discussion_payload = {"question_id": question_id, "question": question[:4000], "answer": answer[:8000], "topic": discussion_topic, "status": discussion_status, "followup": bool(followup_priority), "clarification": bool(clarification_requested), "participation_style": participation_style, "proactive_reason": proactive_reason, **register}
++        existing_discussion = next((x for x in discussion_records if str(x.get("question_id") or "") == question_id), None)
++        if existing_discussion is None:
++            discussion_records.append(discussion_payload)
++            _meeting_discussion_trim(discussion_records)
++            discussion_record_number = len(discussion_records)
++            server_history.append({"role": "user", "content": question[:4000]})
++            server_history.append({"role": "assistant", "content": answer[:8000]})
++            _meeting_conversation_trim(server_history)
++        else:
++            existing_discussion.update(discussion_payload)
++            discussion_record_number = discussion_records.index(existing_discussion) + 1
+ 
+     audit("MEETING_CONVERSATION_AI_RESPONSE_V7412", {
+         "question": question[:300],
+@@ -7918,6 +8163,8 @@
+         "discussion_status": discussion_status,
+         "discussion_record_number": discussion_record_number,
+         "question_id": question_id,
++        "accepted_turn_persisted": True,
++        "single_pairing_id": question_id,
+         "direct_question_detected": bool(direct_question),
+         "question_coverage_state": coverage_state,
+         "question_coverage": coverage_records[-80:],
+@@ -7950,10 +8197,11 @@
+     sid = str(body.get("session_id") or "").strip()
+     records = list(_MEETING_DISCUSSION_RECORDS.get(sid) or [])
+     coverage_records = list(_MEETING_QUESTION_COVERAGE.get(sid) or [])
++    accepted_turns = [x for x in list(_MEETING_ACCEPTED_TURNS.get(sid) or []) if x.get("focus_status") == "accepted"]
+     focus_state = dict(_MEETING_FOCUS_HISTORY.get(sid) or {})
+-    focus_accepted = int(focus_state.get("accepted") or 0)
++    focus_accepted = max(int(focus_state.get("accepted") or 0), len(accepted_turns))
+     focus_rejected = int(focus_state.get("rejected") or 0)
+-    if not records and not coverage_records:
++    if not records and not coverage_records and not accepted_turns:
+         return jsonify({"ok": False, "status": "no_meeting_discussion_record", "version": VERSION}), 400
+     meeting_title = str(body.get("meeting_title") or "").strip()[:300]
+     project_reference = str(body.get("project_reference") or "").strip()[:500]
+@@ -7979,7 +8227,15 @@
+     coverage_total = sum(1 for x in coverage_records if x.get("direct_question"))
+     coverage_answered = sum(1 for x in coverage_records if x.get("direct_question") and str(x.get("state") or "").startswith("Answered"))
+     coverage_clarify = sum(1 for x in coverage_records if x.get("direct_question") and x.get("state") == "Clarification requested")
++    coverage_processing = sum(1 for x in coverage_records if x.get("direct_question") and str(x.get("state") or "") == "Processing")
+     coverage_unanswered = sum(1 for x in coverage_records if x.get("direct_question") and str(x.get("state") or "").startswith("Unanswered"))
++    accepted_processing_lines = []
++    for rec in accepted_turns:
++        if str(rec.get("ai_status") or "") in {"accepted", "processing"}:
++            accepted_processing_lines.append(
++                f"- [{str(rec.get('ai_status') or 'processing').title()}] {str(rec.get('text') or '').strip()}"
++            )
++    accepted_processing_evidence = "\n".join(accepted_processing_lines) or "(No accepted turns currently waiting for an AI response.)"
+     metadata = (
+         "Meeting title: " + (meeting_title or "Not stated") + "\n"
+         "Project / reference: " + (project_reference or "Not stated") + "\n"
+@@ -7994,15 +8250,45 @@
+         "Use these sections exactly: EXECUTIVE SUMMARY; TECHNICAL / PROFESSIONAL DISCUSSIONS; CONFIRMED DECISIONS; ITEMS NOT APPROVED / OWNER APPROVAL REQUIRED; ACTION ITEMS; ADAM RECOMMENDATIONS; OPEN / UNRESOLVED ITEMS; QUESTION COVERAGE / UNANSWERED ITEMS; MEETING FOCUS / FILTERING; DOCUMENTS / CALCULATIONS REQUIRED; NEXT STEPS. "
+         "In QUESTION COVERAGE / UNANSWERED ITEMS, state the direct-question coverage totals and list every clarification-required or unanswered direct question. Do not claim a question was answered if its coverage state says otherwise. "
+         "Keep technical figures and units exact. Include the meeting metadata at the top without inventing missing values.\n\nMEETING METADATA:\n" + metadata +
+-        f"\nQuestion coverage: {coverage_answered} answered / {coverage_total} direct questions; {coverage_clarify} clarification required; {coverage_unanswered} unanswered.\n" +
++        f"\nQuestion coverage: {coverage_answered} answered / {coverage_total} direct questions; {coverage_clarify} clarification required; {coverage_processing} processing; {coverage_unanswered} unanswered.\n" +
+         f"Meeting focus: {focus_accepted} utterances accepted into the formal meeting pipeline; {focus_rejected} side-room/background candidates filtered before formal meeting memory. Rejected conversation text was not retained by the focus history.\n" +
+-        "\nPAIRED MEETING DISCUSSION RECORD:\n" + evidence + "\n\nDIRECT-QUESTION COVERAGE RECORD:\n" + coverage_evidence
++        "\nPAIRED MEETING DISCUSSION RECORD:\n" + evidence +
++        "\n\nACCEPTED TURN STATUS RECORD:\n" + accepted_processing_evidence +
++        "\n\nDIRECT-QUESTION COVERAGE RECORD:\n" + coverage_evidence
+     )
+-    try:
+-        report = call_ai(report_prompt, "English", max_tokens=1800).strip()
+-    except Exception:
+-        report = "EXECUTIVE SUMMARY\nMeeting report generated from retained paired Q&A and direct-question coverage.\n\nTECHNICAL / PROFESSIONAL DISCUSSIONS\n" + evidence + "\n\nCONFIRMED DECISIONS\nNo additional confirmed decisions inferred.\n\nITEMS NOT APPROVED / OWNER APPROVAL REQUIRED\nReview entries marked Not approved.\n\nACTION ITEMS\nOnly participant-assigned actions belong here; do not convert Adam recommendations into assigned actions.\n\nADAM RECOMMENDATIONS\nSee paired evidence marked as Adam recommendation; these are not assigned meeting actions.\n\nOPEN / UNRESOLVED ITEMS\nSee paired discussion statuses above.\n\nQUESTION COVERAGE / UNANSWERED ITEMS\n" + f"{coverage_answered} answered / {coverage_total} direct questions; {coverage_clarify} clarification required; {coverage_unanswered} unanswered.\n" + coverage_evidence + "\n\nMEETING FOCUS / FILTERING\n" + f"{focus_accepted} utterances accepted into the formal meeting pipeline; {focus_rejected} side-room/background candidates filtered before formal meeting memory. Rejected conversation text was not retained by the focus history." + "\n\nDOCUMENTS / CALCULATIONS REQUIRED\nSee Adam responses requesting supporting information.\n\nNEXT STEPS\nClose open items through the normal owner/project approval process."
+-    return jsonify({"ok": True, "status": "meeting_report_ready", "report": report, "session_id": sid, "discussion_record_count": len(records), "meeting_title": meeting_title, "project_reference": project_reference, "participants": participants, "meeting_datetime": meeting_datetime, "paired_evidence_only": True, "live_register_included": True, "question_coverage_included": True, "meeting_focus_included": True, "focus_accepted_count": focus_accepted, "focus_rejected_count": focus_rejected, "direct_question_count": coverage_total, "answered_question_count": coverage_answered, "clarification_question_count": coverage_clarify, "unanswered_question_count": coverage_unanswered, "screen_clear_memory_retained": True, "owner_gate_preserved": True, "external_action_executed": False, "version": VERSION})
++    deterministic_report = (
++        "Meeting title: " + (meeting_title or "Not stated") + "\n"
++        "Project / reference: " + (project_reference or "Not stated") + "\n"
++        "Meeting date/time: " + (meeting_datetime or "Not stated") + "\n"
++        "Participants: " + (participants or "Not stated") +
++        "\n\n## EXECUTIVE SUMMARY\n" +
++        (f"{coverage_processing} accepted direct question(s) are still Processing; no final Adam answer has been recorded yet." if coverage_processing else "Meeting report generated from retained paired Q&A and direct-question coverage.") +
++        "\n\n## TECHNICAL / PROFESSIONAL DISCUSSIONS\n" + evidence +
++        ("\n\nAccepted turns awaiting completion:\n" + accepted_processing_evidence if coverage_processing else "") +
++        "\n\n## CONFIRMED DECISIONS\nNone recorded unless explicitly shown in the paired discussion evidence." +
++        "\n\n## ITEMS NOT APPROVED / OWNER APPROVAL REQUIRED\nReview entries marked Not approved or Owner approval required." +
++        "\n\n## ACTION ITEMS\nOnly participant-assigned actions belong here; Adam recommendations are not converted into assigned actions." +
++        "\n\n## ADAM RECOMMENDATIONS\nSee completed paired discussion evidence; no recommendation is inferred from a Processing turn." +
++        "\n\n## OPEN / UNRESOLVED ITEMS\n" + (accepted_processing_evidence if coverage_processing else "See paired discussion statuses above.") +
++        "\n\n## QUESTION COVERAGE / UNANSWERED ITEMS\n" +
++        f"Direct-question coverage: {coverage_answered} answered / {coverage_total} direct questions; {coverage_clarify} clarification required; {coverage_processing} processing; {coverage_unanswered} unanswered.\n" +
++        coverage_evidence +
++        "\n\n## MEETING FOCUS / FILTERING\n" +
++        f"{focus_accepted} utterances were accepted into the formal meeting pipeline. {focus_rejected} side-room/background candidates were filtered before formal meeting memory." +
++        "\n\n## DOCUMENTS / CALCULATIONS REQUIRED\nNone inferred from incomplete Processing turns." +
++        "\n\n## NEXT STEPS\nWait for any Processing Adam response to complete, then regenerate the report for the final paired record."
++    )
++    if coverage_processing:
++        # Do not ask the report-generation provider to summarize an interaction
++        # whose primary AI answer is still in flight. Return deterministic state
++        # so the report cannot incorrectly claim 0 accepted or 0 unresolved.
++        report = deterministic_report
++    else:
++        try:
++            report = call_ai(report_prompt, "English", max_tokens=1800).strip()
++        except Exception:
++            report = deterministic_report
++    return jsonify({"ok": True, "status": "meeting_report_ready", "report": report, "session_id": sid, "discussion_record_count": len(records), "meeting_title": meeting_title, "project_reference": project_reference, "participants": participants, "meeting_datetime": meeting_datetime, "paired_evidence_only": True, "live_register_included": True, "question_coverage_included": True, "meeting_focus_included": True, "focus_accepted_count": focus_accepted, "focus_rejected_count": focus_rejected, "direct_question_count": coverage_total, "answered_question_count": coverage_answered, "clarification_question_count": coverage_clarify, "processing_question_count": coverage_processing, "unanswered_question_count": coverage_unanswered, "accepted_turn_count": len(accepted_turns), "screen_clear_memory_retained": True, "owner_gate_preserved": True, "external_action_executed": False, "version": VERSION})
+ 
+ 
+ @app.route("/api/personal-assistant/meeting-conversation/report.docx", methods=["POST"])
+@@ -8095,6 +8381,10 @@
+         "participant_roster_focus": True, "semantic_project_focus": True,
+         "near_field_audio_hint": True, "true_biometric_speaker_id_claimed": False,
+         "rejected_background_added_to_formal_memory": False,
++        "accepted_turn_persisted_before_ai_dispatch": True,
++        "single_question_answer_pairing": True,
++        "duplicate_completed_stt_suppression": True,
++        "processing_question_report_state": True,
+         "smart_end_of_turn_silence_ms": 3200,
+         "ai_identity_disclosure_required": True, "may_impersonate_owner": False,
+         "may_make_consequential_commitments_without_separate_approval": False,
+@@ -8124,7 +8414,7 @@
+         "native_docx_report_verified": "report.docx" in src and "meeting_conversation_report_docx_v8321" in appsrc,
+         "meeting_focus_lock_ui_verified": "meetingFocusLock" in src and "focusSensitivity" in src,
+         "selective_listening_gate_verified": "/api/personal-assistant/meeting-conversation/focus-check" in src and "meeting_conversation_focus_check_v8330" in appsrc,
+-        "background_filtered_before_memory_verified": "filtered_before_meeting_memory" in appsrc and "rememberMeetingUtterance(q)" in src,
++        "background_filtered_before_memory_verified": "filtered_before_meeting_memory" in appsrc and "rememberMeetingUtterance(q" in src,
+         "near_field_focus_hint_verified": "peak_rms" in src and "noise_floor" in src,
+         "no_false_biometric_speaker_claim_verified": "true_biometric_speaker_id_claimed" in appsrc,
+         "real_platform_join_not_falsely_claimed": True,
+@@ -8138,7 +8428,7 @@
+     checks = {
+         "focus_lock_default_visible": "Meeting Focus Lock" in src and "meetingFocusLock" in src,
+         "strict_shared_room_default": 'id="focusSensitivity"' in src and 'value="strict" selected' in src,
+-        "focus_gate_called_before_formal_memory": (lambda h: "await checkMeetingFocus" in h and h.find("await checkMeetingFocus") < h.find("rememberMeetingUtterance(q)"))(src[src.find("async function handleFinalMeetingText"):src.find("function setupRecognition")]),
++        "focus_gate_called_before_formal_memory": (lambda h: "await checkMeetingFocus" in h and h.find("await checkMeetingFocus") < h.find("rememberMeetingUtterance(q"))(src[src.find("async function handleFinalMeetingText"):src.find("function setupRecognition")]),
+         "voice_isolation_requested_when_supported": "voiceIsolation" in src,
+         "auto_gain_disabled_for_distance_hint": "autoGainControl:false" in src,
+         "rejected_background_not_added_to_transcript": "filtered side-room speech — not added to meeting record" in src,
+@@ -8157,6 +8447,10 @@
+         _MEETING_DISCUSSION_RECORDS.pop(sid, None)
+         _MEETING_QUESTION_COVERAGE.pop(sid, None)
+         _MEETING_FOCUS_HISTORY.pop(sid, None)
++        _MEETING_ACCEPTED_TURNS.pop(sid, None)
++        with _MEETING_AI_INFLIGHT_LOCK:
++            for key in [x for x in _MEETING_AI_INFLIGHT if x[0] == sid]:
++                _MEETING_AI_INFLIGHT.discard(key)
+     return jsonify({
+         "ok": True,
+         "status": "meeting_conversation_context_cleared",
+--- /mnt/data/adam8411/adam_core/ai_provider_transport.py	2026-09-05 22:18:47.000000000 +0000
++++ /mnt/data/adam8412/adam_core/ai_provider_transport.py	2026-09-09 20:41:23.941734296 +0000
+@@ -32,13 +32,13 @@
+     return payload
+ 
+ 
+-def complete_text(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens=1200):
++def complete_text(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens=1200, timeout=60):
+     key = str(api_key or "").strip()
+     if not key:
+         raise AIProviderTransportError("AI API key is missing. Open AI Settings and save the provider URL, API key and model.")
+     payload = build_chat_payload(prompt, language, model, master_prompt, max_tokens=max_tokens)
+     url = str(api_base or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
+-    r = http.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, json=payload, timeout=60)
++    r = http.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, json=payload, timeout=timeout)
+     if not getattr(r, "ok", False):
+         raise AIProviderTransportError(f"AI provider error {getattr(r, 'status_code', 'unknown')}: {str(getattr(r, 'text', ''))[:300]}")
+     try:
+--- /mnt/data/adam8411/templates/real_meeting_attendance.html	2026-09-09 13:03:52.000000000 +0000
++++ /mnt/data/adam8412/templates/real_meeting_attendance.html	2026-09-09 20:41:32.748158459 +0000
+@@ -13,7 +13,7 @@
+ <label>Live transcript / manual notes</label><textarea id="transcript" placeholder="Live transcript will appear here. You can also paste meeting transcript or notes manually."></textarea>
+ <div class="note" id="typedMeetingQueryPanel" style="margin-top:10px"><b>Typed meeting query / comment / order</b><p style="margin:6px 0"><small>Use this box when you want Adam to answer typed meeting input. It uses the same Meeting Focus, project isolation, meeting memory, question coverage, and owner-approval rules as microphone speech. Press Enter or click Send Typed Query.</small></p><div style="display:flex;gap:8px;align-items:center"><input id="meetingTextQuery" type="text" style="flex:1" placeholder="Example: The contractor wants to increase the chilled-water pipe from 100 mm to 125 mm. What do you think?"><button id="sendMeetingTextQuery" type="button">Send Typed Query</button></div><p id="meetingTextQueryStatus" style="margin:6px 0 0">Typed meeting input: ready</p></div>
+ <button id="start">Start Listening</button><button id="stop" class="stop">Stop Listening</button><button id="analyze" class="secondary">Analyze Meeting Notes</button><button id="clear" class="secondary">Clear Screen</button><button id="endMeeting" class="stop">End Meeting / New Session</button>
+-<p id="micStatus">Microphone: idle</p><p id="autoStatus"><b>Representative auto-response:</b> not armed</p><pre id="out">Ready.</pre>
++<p id="micStatus">Microphone: idle</p><p id="autoStatus"><b>Representative auto-response:</b> not armed</p><p id="meetingReplyTrace"><b>Meeting reply trace:</b> ready</p><pre id="out">Ready.</pre>
+ <div id="universalAssistantPanel" class="ok" style="margin-top:16px"><b>Adam — Universal AI Assistant</b><p><b>Normal assistant mode:</b> ask Adam anything by text or voice. Universal Assistant is independent of Meeting Focus Lock, project isolation, and meeting-question filters. It keeps one active task/thread at a time so an old subject is not mixed into a new one. External actions still use Adam's normal owner-approval boundaries.</p><div class="row"><div><label>Current task / subject focus</label><input id="universalTaskFocus" type="text" placeholder="Example: Prepare RFI reply / Review HVAC issue / General questions"></div><div><label>Assistant response</label><select id="universalResponseLanguage"><option value="auto" selected>Auto — match my request</option><option value="English">English</option><option value="Arabic">Arabic</option></select></div></div><label>Ask Adam anything / give an order</label><textarea id="universalInput" style="min-height:85px" placeholder="Example: Explain this technical issue, draft a letter, check my saved contact, prepare an email, or ask any general question."></textarea><button id="universalAsk">Ask Adam</button><button id="universalVoice" class="secondary">🎙 Voice Query</button><button id="universalNewTask" class="secondary">Start New Task</button><div class="check"><input id="universalContinuityMemory" type="checkbox" checked><label for="universalContinuityMemory" style="margin:0">Use persistent owner memory across Adam upgrades (explicit corrections / “remember this” only)</label></div><div class="check"><input id="universalSpeak" type="checkbox" checked><label for="universalSpeak" style="margin:0">Speak Adam's answer automatically</label></div><p id="universalStatus">Universal Assistant: ready — no meeting approval required for normal Q&amp;A</p><label>Adam answer</label><textarea id="universalReply" readonly style="min-height:120px" placeholder="Adam's latest answer appears here."></textarea><label>Current task conversation — retained until Start New Task</label><textarea id="universalHistory" readonly style="min-height:150px" placeholder="Only the current task thread is kept here. Start New Task clears it so subjects do not mix."></textarea><label>Prepared action / review status</label><textarea id="universalAction" readonly style="min-height:90px" placeholder="If your request prepares an email, calendar item, WhatsApp, workflow, contact update, follow-up, or another action, Adam shows the prepared/review state here. Consequential external actions remain subject to normal owner approval."></textarea><p><a href="/">Open Main Adam Assistant for full action-review controls</a></p></div>
+ <div id="participantPanel" class="note" style="display:none"><b>Active Participant — governed response</b><p>In Active Participant mode Adam prepares a response first and speaking uses the session approval below. In Owner Representative mode, one explicit representative approval arms automatic answers to participants who address “Adam” / “آدم”; consequential actions still require their own separate owner approval. Adam identifies himself as AI.</p><label>Latest Adam response / owner edit</label><textarea id="responseDraft" style="min-height:90px" placeholder="Adam's latest reply appears here and remains visible until another reply or End Meeting / New Session."></textarea><label>Adam reply history — retained for this meeting</label><textarea id="responseHistory" readonly style="min-height:150px" placeholder="Adam's spoken replies and clarification questions will remain here for the full meeting session. Clear Screen does not remove them."></textarea><label>Participant questions / requests / corrections — retained for this meeting</label><textarea id="questionHistory" readonly style="min-height:105px" placeholder="Meaningful questions and requests Adam handled will remain here. Background noise, likely side-room conversations, and greetings are not added when Meeting Focus Lock is enabled."></textarea><label>Meeting Discussion Record — paired participant + Adam / topic / status</label><textarea id="discussionRecord" readonly style="min-height:210px" placeholder="Each meaningful participant question is paired with Adam's answer, topic, and status. Short follow-ups stay attached to the immediately preceding discussion thread."></textarea><label>Live Meeting Register — actions / risks / approvals</label><textarea id="meetingRegister" readonly style="min-height:150px" placeholder="Adam will classify open actions, information requests, risks, and items that still require owner approval. This register never creates an approval by itself."></textarea><label>Question Coverage Monitor — every direct question accounted for</label><textarea id="questionCoverage" readonly style="min-height:150px" placeholder="Every substantive direct participant question will appear here as Answered, Answered — information unavailable, Clarification requested, or Unanswered. Saying only “Adam” or a question preamble does not create a coverage item. Adam retries one temporary AI failure automatically instead of silently dropping the question."></textarea><div class="ok" style="margin-top:12px"><b>Professional Meeting Report</b><p>Generate the report from the retained paired discussion record and live register, including context that remains after Clear Screen. The report distinguishes decisions, recommendations, open items, information required, and items needing owner approval.</p><button id="generateReport">Generate Meeting Report</button><button id="downloadReport" class="secondary">Download Word (.docx)</button><button id="printReport" class="secondary">Print / Save PDF</button><textarea id="meetingReport" readonly style="min-height:260px" placeholder="Generated meeting report will appear here."></textarea></div><button id="prepareResponse" class="secondary">Prepare Response</button><div class="check" id="manualSpeakApprovalRow"><input id="speakApproved" type="checkbox"><label for="speakApproved" style="margin:0">Owner Approval — allow Adam to speak this response</label></div><button id="authorizeSpeak">Authorize & Speak</button><p id="speakStatus">Speaking: not authorized</p>
+ <div id="representativePanel" class="ok" style="display:none;margin-top:14px"><b>Owner Representative — professional rehearsal mode</b><p>Adam may represent Mohamad in professional discussion across disciplines, answer questions, explain, ask for clarification, and state only supported facts or positions written in the briefing below. Adam understands multilingual/code-switched speech. His default reply is English; a participant may explicitly ask him to switch to Arabic or another language. Adam must disclose that he is an AI representative and cannot approve costs, variations, contractual changes, purchases, payments, committed dates, or other consequential commitments without separate owner approval.</p><p><b>Natural meeting dialogue:</b> ON — Adam answers like an experienced professional colleague: conclusion first, concise by default, conversational follow-ups, calm disagreement, minimal robotic preambles, and practical clarification only when needed.</p><div class="note" id="meetingFocusPanel"><b>Human Meeting Presence — Intelligent Meeting Focus</b><div class="check"><input id="meetingFocusLock" type="checkbox" checked><label for="meetingFocusLock" style="margin:0">Meeting Focus Lock — concentrate on this meeting and reject likely side-room / other-project speech before formal transcript, memory, Q&amp;A, and report</label></div><div class="row"><div><label>Room focus sensitivity</label><select id="focusSensitivity"><option value="strict" selected>Strict — shared room / nearby conversations</option><option value="balanced">Balanced — normal meeting room</option><option value="open">Open — capture all detected speech</option></select></div><div><label>Meeting focus / agenda keywords</label><input id="meetingFocusAgenda" type="text" placeholder="Example: MEP coordination, Tower, HVAC, chilled water, ductwork, variations"></div></div><p><small>Focus Lock combines meeting title/project, declared participants/companies, current discussion context, topic relevance, and a weak near-field audio hint. In Strict mode, an explicitly named different project is a hard reject unless the speaker clearly frames it as a comparison/reference to the active project. Where the browser supports it, microphone voice isolation is requested and automatic gain is disabled so distant voices are less likely to dominate. This version does not claim biometric speaker identification or perfect physical source separation. Audio may still be processed transiently for speech transcription; filtered side conversations are not added to Adam's formal meeting transcript or retained meeting memory.</small></p><label>Selective Listening Monitor</label><textarea id="focusMonitor" readonly style="min-height:120px" placeholder="Adam will show accepted meeting speech vs filtered side-room speech here without retaining the rejected conversation text."></textarea></div><label>Representative participation style</label><select id="participationStyle"><option value="conservative">Conservative — direct questions only</option><option value="balanced" selected>Balanced — questions + material approval/commitment risks</option><option value="proactive">Proactive — also flag material technical/commercial risks and owner actions</option></select><p style="margin-top:6px"><small>Balanced is recommended. Adam should not interrupt routine discussion; proactive intervention is limited to material risks, commitments, contradictions, or owner actions.</small></p><label>Professional discipline</label><select id="professionalScope"><option value="auto" selected>Auto-detect — cross-disciplinary professional</option><option value="engineering_mep">Engineering / MEP / Construction</option><option value="project_management">Project Management</option><option value="commercial_contracts">Commercial / Contracts</option><option value="procurement">Procurement</option><option value="finance">Finance / Cost</option><option value="it_software">IT / Software</option><option value="sales_business">Sales / Business</option><option value="other">Other professional discipline</option></select><label>Owner briefing / positions Adam may rely on</label><textarea id="ownerBriefing" style="min-height:120px" placeholder="Example: Mechanical shop drawings are targeted for Tuesday. Do not accept any variation or cost. Ask the contractor to submit supporting documents for owner review."></textarea><label>Authority profile</label><textarea id="authorityProfile" style="min-height:90px">Answer technical and factual questions; ask for clarification; take notes; record requests for Mohamad. Do not approve variations, costs, contractual changes, purchases, payments, commitments, or date changes without separate owner approval.</textarea><div class="check" id="representativeApprovalRow" style="display:none"><input id="representativeApproved" type="checkbox"><label for="representativeApproved" style="margin:0">Owner representative session approval (synchronized with the main approval above)</label></div><p><b>Test operation:</b> use a second device/person as the meeting participant. Ask questions aloud or type them below. Adam should answer, speak, take notes, and refuse consequential commitments.</p></div><hr><b>Interactive Meeting Conversation</b><p>Approve once for this meeting session. Adam can then answer questions addressed to “Adam” and continue follow-up discussion. External actions and commitments still require their normal separate approvals. Do not promise, send, approve, purchase, trade, schedule, or execute external actions without the normal separate owner approval.</p>
+@@ -48,7 +48,7 @@
+ const MEETING_END_OF_TURN_SILENCE_MS=3200;const MEETING_RESPONSE_STABILITY_MS=650;const MEETING_MAX_AUTOREPLY_WAIT_MS=6000;const MEETING_SILENT_CHUNK_MS=8000;const MEETING_MAX_UTTERANCE_MS=60000;const MEETING_CLARIFICATION_WINDOW_MS=45000;
+ const transcript=document.getElementById('transcript'); const micStatus=document.getElementById('micStatus'); const modeEl=document.getElementById('mode'); const participantPanel=document.getElementById('participantPanel');
+ const meetingDateTimeEl=document.getElementById('meetingDateTime');if(meetingDateTimeEl&&!meetingDateTimeEl.value){const d=new Date();const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);meetingDateTimeEl.value=local.toISOString().slice(0,16);}
+-let meetingAutoResponseBusy=false;let meetingLastAutoQuestion='';let meetingLastAutoAt=0;let meetingPendingAutoParts=[];let meetingPendingAutoTimer=null;let meetingPendingAutoStartedAt=0;let meetingLastAcceptedTranscriptAt=0;
++let meetingAutoResponseBusy=false;let meetingAutoInFlightKey='';let meetingLastAutoQuestion='';let meetingLastAutoAt=0;let meetingPendingAutoParts=[];let meetingPendingAutoQuestionId='';let meetingPendingAutoTimer=null;let meetingPendingAutoStartedAt=0;let meetingLastAcceptedTranscriptAt=0;let meetingLastFocusCandidateText='';let meetingLastFocusCandidateAt=0;
+ let meetingResponseHistory=[];let meetingQuestionHistory=[];let meetingAwaitingClarification=false;let meetingClarificationPrompt='';let meetingClarificationAt=0;
+ let meetingFocusAcceptedCount=0;let meetingFocusRejectedCount=0;let meetingFocusEvents=[];
+ let meetingAddressHoldUntil=0;const MEETING_ADDRESS_HOLD_MS=12000;
+@@ -69,9 +69,11 @@
+  const box=document.getElementById('questionHistory');if(box){box.value=meetingQuestionHistory.map((x,i)=>(i+1)+'. '+x).join('\n\n');box.scrollTop=box.scrollHeight;}
+ }
+ let meetingDiscussionHistory=[];
+-function rememberDiscussionRecord(question,answer,topic,status,followup,registerType,registerState,ownerApprovalRequired,actionCandidate,riskFlag,actionOrigin){
++function rememberDiscussionRecord(question,answer,topic,status,followup,registerType,registerState,ownerApprovalRequired,actionCandidate,riskFlag,actionOrigin,questionId=''){
+  const q=String(question||'').trim(),a=String(answer||'').trim();if(!q||!a)return;
+- meetingDiscussionHistory.push({question:q,answer:a,topic:String(topic||'General Meeting Discussion'),status:String(status||'Explained'),followup:!!followup,registerType:String(registerType||'Discussion'),registerState:String(registerState||'Recorded'),ownerApprovalRequired:!!ownerApprovalRequired,actionCandidate:!!actionCandidate,riskFlag:!!riskFlag,actionOrigin:String(actionOrigin||'None')});
++ const payload={questionId:String(questionId||''),question:q,answer:a,topic:String(topic||'General Meeting Discussion'),status:String(status||'Explained'),followup:!!followup,registerType:String(registerType||'Discussion'),registerState:String(registerState||'Recorded'),ownerApprovalRequired:!!ownerApprovalRequired,actionCandidate:!!actionCandidate,riskFlag:!!riskFlag,actionOrigin:String(actionOrigin||'None')};
++ const existing=payload.questionId?meetingDiscussionHistory.find(x=>String(x.questionId||'')===payload.questionId):null;
++ if(existing)Object.assign(existing,payload);else meetingDiscussionHistory.push(payload);
+  if(meetingDiscussionHistory.length>100)meetingDiscussionHistory=meetingDiscussionHistory.slice(-100);
+  const box=document.getElementById('discussionRecord');if(box){box.value=meetingDiscussionHistory.map((x,i)=>(i+1)+'. ['+x.topic+'] ['+x.status+']'+(x.followup?' [Follow-up thread]':'')+'\nParticipant: '+x.question+'\nAdam: '+x.answer).join('\n\n');box.scrollTop=box.scrollHeight;}
+  const reg=document.getElementById('meetingRegister');if(reg){const items=meetingDiscussionHistory.filter(x=>x.registerType!=='Discussion'||x.ownerApprovalRequired||x.actionCandidate||x.riskFlag);reg.value=items.map((x,i)=>(i+1)+'. ['+x.registerType+'] ['+x.registerState+'] ['+x.topic+']'+(x.ownerApprovalRequired?' [OWNER APPROVAL REQUIRED]':'')+(x.actionOrigin&&x.actionOrigin!=='None'?' ['+x.actionOrigin+']':'')+'\nParticipant: '+x.question+'\nAdam: '+x.answer).join('\n\n');reg.scrollTop=reg.scrollHeight;}
+@@ -82,6 +84,13 @@
+  box.value=rows.map((x,i)=>(i+1)+'. ['+String(x.state||'Pending')+']'+(x.topic?' ['+x.topic+']':'')+'\nParticipant: '+String(x.question||'')+(x.answer?'\nAdam: '+String(x.answer):'')).join('\n\n');box.scrollTop=box.scrollHeight;
+ }
+ function newMeetingQuestionId(){try{return crypto.randomUUID();}catch(_){return String(Date.now())+'-'+Math.random().toString(16).slice(2);}}
++let meetingReplyTraceSteps=[];let meetingReplyTraceQuestionId='';
++function resetMeetingReplyTrace(){meetingReplyTraceSteps=[];meetingReplyTraceQuestionId='';const el=document.getElementById('meetingReplyTrace');if(el)el.innerHTML='<b>Meeting reply trace:</b> ready';}
++function setMeetingReplyTrace(step,label,questionId=''){
++ const qid=String(questionId||'');if(step===1&&(qid!==meetingReplyTraceQuestionId||!meetingReplyTraceSteps.length)){meetingReplyTraceSteps=[];meetingReplyTraceQuestionId=qid;}
++ const idx=meetingReplyTraceSteps.findIndex(x=>x.step===Number(step));const item={step:Number(step),label:String(label||'')};if(idx>=0)meetingReplyTraceSteps[idx]=item;else meetingReplyTraceSteps.push(item);meetingReplyTraceSteps.sort((a,b)=>a.step-b.step);
++ const el=document.getElementById('meetingReplyTrace');if(el)el.innerHTML='<b>Meeting reply trace:</b> '+meetingReplyTraceSteps.map(x=>x.step+' '+x.label).join(' → ');
++}
+ function sleepMeeting(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+ function looksLikeLowInformationNoise(q){
+  const raw=String(q||'').trim();if(!raw)return true;const n=normalizeAutoQuestion(raw);if(!n)return true;
+@@ -103,7 +112,7 @@
+  const lockEl=document.getElementById('meetingFocusLock');const focusLocked=!!(lockEl&&lockEl.checked);
+  if(!focusLocked)return {accept:true,decision:'accept',reason:'meeting focus lock is open'};
+  try{
+-  const r=await fetch('/api/personal-assistant/meeting-conversation/focus-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId,text:String(q||''),owner_approved:approved(),focus_locked:focusLocked,focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',peak_rms:Number(options.peak_rms||0),noise_floor:Number(options.noise_floor||0),vad_available:!!options.vad_available})});
++  const r=await fetch('/api/personal-assistant/meeting-conversation/focus-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId,question_id:String(options.questionId||options.utterance_id||''),utterance_id:String(options.questionId||options.utterance_id||''),text:String(q||''),owner_approved:approved(),focus_locked:focusLocked,focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',peak_rms:Number(options.peak_rms||0),noise_floor:Number(options.noise_floor||0),vad_available:!!options.vad_available})});
+   const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok){if(explicitOtherProjectReferenceLocal(q))return {accept:false,decision:'reject',reason:'local hard project boundary — explicit other project'};const explicit=(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||meetingAwaitingClarification;return {accept:!!explicit,decision:explicit?'accept':'reject',reason:explicit?'focus service unavailable — explicit substantive Adam/follow-up retained':'focus service unavailable — strict shared-room protection filtered unverified speech'}}renderMeetingFocus(j);return j;
+  }catch(_){if(explicitOtherProjectReferenceLocal(q))return {accept:false,decision:'reject',reason:'local hard project boundary — explicit other project'};const explicit=(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||meetingAwaitingClarification;return {accept:!!explicit,decision:explicit?'accept':'reject',reason:explicit?'focus service unavailable — explicit substantive Adam/follow-up retained':'focus service unavailable — strict shared-room protection filtered unverified speech'};}
+ }
+@@ -187,26 +196,29 @@
+  syncRepresentativeApproval();
+ } modeEl.addEventListener('change',syncParticipant);document.getElementById('approved').addEventListener('change',syncRepresentativeApproval); syncParticipant();
+ function approved(){return document.getElementById('approved').checked;}
+-function queueAutomaticQuestion(q){
++function queueAutomaticQuestion(q,questionId=''){
+  const text=String(q||'').trim();if(!text)return;const key=normalizeAutoQuestion(text);
+- const exists=meetingQuestionQueue.some(x=>normalizeAutoQuestion(x)===key);if(!exists)meetingQuestionQueue.push(text);
++ if(key&&key===meetingAutoInFlightKey)return;
++ const exists=meetingQuestionQueue.some(x=>normalizeAutoQuestion((x&&x.text)||x)===key);if(!exists)meetingQuestionQueue.push({text,questionId:String(questionId||'')});
+  document.getElementById('conversationStatus').textContent='Conversation: participant interaction captured — queued for Adam';
+ }
+ async function processAutomaticQuestionQueue(){
+  if(meetingAutoResponseBusy||!meetingQuestionQueue.length)return;
+- const next=meetingQuestionQueue.shift();await triggerAutomaticConversation(next);
++ const next=meetingQuestionQueue.shift();await triggerAutomaticConversation((next&&next.text)||next,{questionId:String((next&&next.questionId)||'')});
+ }
+-async function triggerAutomaticConversation(q){
+- const key=normalizeAutoQuestion(q);const now=Date.now();
++async function triggerAutomaticConversation(q,options={}){
++ const key=normalizeAutoQuestion(q);const now=Date.now();const questionId=String(options.questionId||newMeetingQuestionId());
++ if(key&&key===meetingAutoInFlightKey)return true;
+  if(key&&key===meetingLastAutoQuestion&&now-meetingLastAutoAt<15000)return true;
+- if(meetingAutoResponseBusy){queueAutomaticQuestion(q);return true;}
+- meetingAutoResponseBusy=true;document.getElementById('conversationInput').value=q;
+- const questionId=newMeetingQuestionId();let handled=false;
+- try{handled=await runInteractiveConversation(q,{questionId,attempt:0});if(handled){meetingLastAutoQuestion=key;meetingLastAutoAt=Date.now();}return !!handled;}finally{meetingAutoResponseBusy=false;setTimeout(processAutomaticQuestionQueue,100);}
++ if(meetingAutoResponseBusy){queueAutomaticQuestion(q,questionId);return true;}
++ meetingAutoResponseBusy=true;meetingAutoInFlightKey=key;document.getElementById('conversationInput').value=q;
++ setMeetingReplyTrace(2,'representative dispatch started',questionId);
++ let handled=false;
++ try{handled=await runInteractiveConversation(q,{questionId,attempt:0});if(handled){meetingLastAutoQuestion=key;meetingLastAutoAt=Date.now();}return !!handled;}finally{meetingAutoResponseBusy=false;if(meetingAutoInFlightKey===key)meetingAutoInFlightKey='';setTimeout(processAutomaticQuestionQueue,100);}
+ }
+-function scheduleAutomaticConversationAfterEndOfTurn(q){
++function scheduleAutomaticConversationAfterEndOfTurn(q,questionId=''){
+  const part=String(q||'').trim();if(!part)return;
+- meetingPendingAutoParts.push(part);
++ meetingPendingAutoParts.push(part);if(!meetingPendingAutoQuestionId)meetingPendingAutoQuestionId=String(questionId||'');
+  if(!meetingPendingAutoStartedAt)meetingPendingAutoStartedAt=Date.now();
+  meetingLastAcceptedTranscriptAt=Date.now();
+  if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}
+@@ -225,9 +237,9 @@
+    micStatus.textContent='Microphone: listening — Adam is waiting for the participant to finish the full turn';
+    meetingPendingAutoTimer=setTimeout(check,250);return;
+   }
+-  const combined=meetingPendingAutoParts.join(' ').replace(/\s+/g,' ').trim();
+-  meetingPendingAutoParts=[];meetingPendingAutoTimer=null;meetingPendingAutoStartedAt=0;
+-  if(combined){micStatus.textContent=watchdog?'Microphone: response watchdog — Adam is answering captured interaction':'Microphone: participant turn complete — Adam is answering';triggerAutomaticConversation(combined);}
++  const combined=meetingPendingAutoParts.join(' ').replace(/\s+/g,' ').trim();const questionIdForTurn=meetingPendingAutoQuestionId||newMeetingQuestionId();
++  meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoTimer=null;meetingPendingAutoStartedAt=0;
++  if(combined){micStatus.textContent=watchdog?'Microphone: response watchdog — Adam is answering captured interaction':'Microphone: participant turn complete — Adam is answering';triggerAutomaticConversation(combined,{questionId:questionIdForTurn});}
+  };
+  meetingPendingAutoTimer=setTimeout(check,Math.min(MEETING_RESPONSE_STABILITY_MS,700));
+ }
+@@ -239,10 +251,10 @@
+  const hw=new Set(heard.split(' ').filter(x=>x.length>2)),sw=new Set(spoken.split(' ').filter(x=>x.length>2));if(!hw.size)return false;
+  let overlap=0;for(const w of hw)if(sw.has(w))overlap++;return overlap/hw.size>=0.78;
+ }
+-function rememberMeetingUtterance(q){
++function rememberMeetingUtterance(q,questionId=''){
+  const text=String(q||'').trim();if(!text)return;
+  const sid=meetingConversationSessionId;
+- meetingMemorySyncQueue=meetingMemorySyncQueue.catch(()=>{}).then(()=>fetch('/api/personal-assistant/meeting-conversation/note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,text,owner_approved:approved()})})).catch(()=>{});
++ meetingMemorySyncQueue=meetingMemorySyncQueue.catch(()=>{}).then(()=>fetch('/api/personal-assistant/meeting-conversation/note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,question_id:String(questionId||''),utterance_id:String(questionId||''),text,owner_approved:approved()})})).catch(()=>{});
+ }
+ function stopAdamSpeechForBargeIn(){
+  if(!meetingAdamSpeaking)return false;meetingVoiceJobSeq++;
+@@ -263,8 +275,9 @@
+  }
+  return out.join('\n').trim();
+ }
+-async function dispatchCompletedParticipantTurn(q){
++async function dispatchCompletedParticipantTurn(q,questionId=''){
+  let parts=meetingPendingAutoParts.slice();meetingPendingAutoParts=[];
++ const questionIdForTurn=meetingPendingAutoQuestionId||String(questionId||'')||newMeetingQuestionId();meetingPendingAutoQuestionId='';
+  if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}
+  if(q)parts.push(q);
+  const merged=[];let last='';
+@@ -272,26 +285,32 @@
+  const combined=merged.join(' ').replace(/\s+/g,' ').trim();
+  if(!combined)return false;
+  micStatus.textContent='Microphone: participant finished — Adam is answering';
+- return await triggerAutomaticConversation(combined);
++ return await triggerAutomaticConversation(combined,{questionId:questionIdForTurn});
+ }
+ async function handleFinalMeetingText(text,options={}){
+  const q=dedupeConsecutiveTranscriptLines(text); if(!q)return;
+  if(looksLikeAdamSpeakerEcho(q)){micStatus.textContent='Microphone: listening — Adam speaker echo filtered';return;}
+- const focus=await checkMeetingFocus(q,options);
+- if(focus&&focus.accept===false){micStatus.textContent=(focus.hard_project_mismatch?'Microphone: other-project speech filtered — active project protected':'Microphone: filtered side-room speech — not added to meeting record');document.getElementById('conversationStatus').textContent=focus.hard_project_mismatch?'Conversation: explicit other-project speech ignored — Adam remains anchored to '+((document.getElementById('projectReference')||{}).value||'the active project'):'Conversation: background / other-project speech ignored — Adam remains focused on this meeting';return;}
+- if(isWakeOnly(q)){armMeetingAddressHold('Adam heard his name');return;}
+- if(isQuestionPreamble(q)){armMeetingAddressHold('Question preamble heard');return;}
+- const addressContinuation=meetingAddressHoldActive()&&!looksLikeLowInformationNoise(q);if(addressContinuation)meetingAddressHoldUntil=0;
+  const now=Date.now(),qKey=normalizeAutoQuestion(q);
+- // Some browsers/providers can deliver the same completed utterance twice. Keep one copy
+- // in the visible transcript, memory, and response queue without suppressing later repeats.
+- if(qKey&&qKey===meetingLastTranscriptText&&now-meetingLastTranscriptAt<12000){
++ // v8.4.1.2 — suppress duplicate completed STT callbacks BEFORE the async
++ // focus check. Previously two callbacks could both enter the server while the
++ // first was waiting on focus/AI and create duplicate Processing questions.
++ if(qKey&&qKey===meetingLastFocusCandidateText&&now-meetingLastFocusCandidateAt<12000){
+   if(options.finalTurn)micStatus.textContent='Microphone: duplicate completed turn ignored — listening';
+-  return;
++  return true;
+  }
+- meetingLastTranscriptText=qKey;meetingLastTranscriptAt=now;meetingLastAcceptedTranscriptAt=now;
++ meetingLastFocusCandidateText=qKey;meetingLastFocusCandidateAt=now;
++ const proposedQuestionId=String(options.questionId||newMeetingQuestionId());
++ const focus=await checkMeetingFocus(q,{...options,questionId:proposedQuestionId});
++ if(focus&&focus.session_id)meetingConversationSessionId=String(focus.session_id);
++ const stableQuestionId=String((focus&&focus.question_id)||proposedQuestionId);
++ if(!(focus&&focus.accept===false))setMeetingReplyTrace(1,'speech accepted',stableQuestionId);
++ if(focus&&focus.accept===false){micStatus.textContent=(focus.hard_project_mismatch?'Microphone: other-project speech filtered — active project protected':'Microphone: filtered side-room speech — not added to meeting record');document.getElementById('conversationStatus').textContent=focus.hard_project_mismatch?'Conversation: explicit other-project speech ignored — Adam remains anchored to '+((document.getElementById('projectReference')||{}).value||'the active project'):'Conversation: background / other-project speech ignored — Adam remains focused on this meeting';return true;}
++ if(isWakeOnly(q)){armMeetingAddressHold('Adam heard his name');return true;}
++ if(isQuestionPreamble(q)){armMeetingAddressHold('Question preamble heard');return true;}
++ const addressContinuation=meetingAddressHoldActive()&&!looksLikeLowInformationNoise(q);if(addressContinuation)meetingAddressHoldUntil=0;
++ meetingLastTranscriptText=qKey;meetingLastTranscriptAt=Date.now();meetingLastAcceptedTranscriptAt=Date.now();
+  transcript.value+=(transcript.value && !transcript.value.endsWith('\n')?'\n':'')+q+'\n';
+- transcript.scrollTop=transcript.scrollHeight;rememberMeetingUtterance(q);
++ transcript.scrollTop=transcript.scrollHeight;rememberMeetingUtterance(q,stableQuestionId);
+  const trigger=document.getElementById('answerTrigger').value;
+  const representativeMode=modeEl.value==='owner_representative';
+  const representativeArmed=representativeMode && approved();
+@@ -304,12 +323,11 @@
+   rememberParticipantQuestion(q);
+   if(proactiveReason)document.getElementById('conversationStatus').textContent='Conversation: material meeting issue detected — Adam is evaluating whether to intervene';
+   if(meetingAdamSpeaking)stopAdamSpeechForBargeIn();
+-  // A server recording marked finalTurn already ended after sustained silence. Dispatch it
+-  // directly instead of waiting on the VAD state of the *next* recorder.
+-  if(options.finalTurn)return await dispatchCompletedParticipantTurn(q);else scheduleAutomaticConversationAfterEndOfTurn(q);
++  if(options.finalTurn)return await dispatchCompletedParticipantTurn(q,stableQuestionId);else scheduleAutomaticConversationAfterEndOfTurn(q,stableQuestionId);
+  }else if(addressed && representativeMode && !representativeArmed){
+   document.getElementById('conversationStatus').textContent='Conversation: participant question detected — check Owner Approval above before Adam answers';
+  }
++ return true;
+ }
+ async function sendTypedMeetingQuery(){
+  primeMeetingVoice();
+@@ -439,8 +457,8 @@
+  try{recognition.start();micStatus.textContent='Microphone: listening — Adam AI assistant';}catch(e){micStatus.textContent='Microphone: '+e.message;}
+ };
+ document.getElementById('stop').onclick=()=>{stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}micStatus.textContent='Microphone: stopped';};
+-document.getElementById('clear').onclick=()=>{transcript.value='';meetingPendingAutoParts=[];meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('conversationStatus').textContent='Conversation: transcript screen cleared — Adam retained meeting memory and reply history';document.getElementById('out').textContent='Screen cleared. Meeting memory retained; Adam\'s latest reply, reply history, and participant question history are retained until End Meeting / New Session.';};
+-document.getElementById('endMeeting').onclick=async()=>{if(!confirm('End this meeting and clear Adam\'s temporary meeting memory for this session?'))return;stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}stopAdamSpeechForBargeIn();try{await meetingMemorySyncQueue.catch(()=>{});await fetch('/api/personal-assistant/meeting-conversation/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId})});}catch(_){ }meetingConversationHistory=[];meetingQuestionQueue=[];meetingPendingAutoParts=[];meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;meetingResponseHistory=[];meetingQuestionHistory=[];meetingDiscussionHistory=[];meetingFocusAcceptedCount=0;meetingFocusRejectedCount=0;meetingFocusEvents=[];meetingAddressHoldUntil=0;meetingAwaitingClarification=false;meetingClarificationPrompt='';meetingClarificationAt=0;meetingConversationSessionId=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);meetingIdentityDeclared=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastVoiceDeliveryOk=false;meetingLastSpokenText='';meetingLastTranscriptText='';meetingLastTranscriptAt=0;transcript.value='';document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('responseDraft').value='';document.getElementById('responseHistory').value='';document.getElementById('questionHistory').value='';document.getElementById('discussionRecord').value='';document.getElementById('meetingRegister').value='';document.getElementById('questionCoverage').value='';if(document.getElementById('focusMonitor'))document.getElementById('focusMonitor').value='';document.getElementById('meetingReport').value='';document.getElementById('conversationStatus').textContent='Conversation: new meeting session ready';document.getElementById('out').textContent='Previous meeting session ended and temporary memory cleared.';micStatus.textContent='Microphone: stopped';};
++document.getElementById('clear').onclick=()=>{transcript.value='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('conversationStatus').textContent='Conversation: transcript screen cleared — Adam retained meeting memory and reply history';document.getElementById('out').textContent='Screen cleared. Meeting memory retained; Adam\'s latest reply, reply history, and participant question history are retained until End Meeting / New Session.';};
++document.getElementById('endMeeting').onclick=async()=>{if(!confirm('End this meeting and clear Adam\'s temporary meeting memory for this session?'))return;stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}stopAdamSpeechForBargeIn();try{await meetingMemorySyncQueue.catch(()=>{});await fetch('/api/personal-assistant/meeting-conversation/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId})});}catch(_){ }meetingConversationHistory=[];meetingQuestionQueue=[];meetingAutoResponseBusy=false;meetingAutoInFlightKey='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;meetingLastAutoQuestion='';meetingLastAutoAt=0;meetingLastFocusCandidateText='';meetingLastFocusCandidateAt=0;meetingResponseHistory=[];meetingQuestionHistory=[];meetingDiscussionHistory=[];meetingFocusAcceptedCount=0;meetingFocusRejectedCount=0;meetingFocusEvents=[];meetingAddressHoldUntil=0;meetingAwaitingClarification=false;meetingClarificationPrompt='';meetingClarificationAt=0;meetingConversationSessionId=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);meetingIdentityDeclared=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastVoiceDeliveryOk=false;meetingLastSpokenText='';meetingLastTranscriptText='';meetingLastTranscriptAt=0;transcript.value='';document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('responseDraft').value='';document.getElementById('responseHistory').value='';document.getElementById('questionHistory').value='';document.getElementById('discussionRecord').value='';document.getElementById('meetingRegister').value='';document.getElementById('questionCoverage').value='';if(document.getElementById('focusMonitor'))document.getElementById('focusMonitor').value='';document.getElementById('meetingReport').value='';document.getElementById('conversationStatus').textContent='Conversation: new meeting session ready';document.getElementById('out').textContent='Previous meeting session ended and temporary memory cleared.';resetMeetingReplyTrace();micStatus.textContent='Microphone: stopped';};
+ document.getElementById('analyze').onclick=async()=>{const text=transcript.value.trim();const segments=text?text.split(/\n+/).filter(Boolean).map(x=>({text:x})):[];const body={platform:document.getElementById('platform').value,mode:document.getElementById('mode').value,owner_approved:approved(),segments};const r=await fetch('/api/personal-assistant/real-meeting-attendance/process',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('out').textContent=JSON.stringify(await r.json(),null,2);};
+ 
+ document.getElementById('prepareResponse').onclick=async()=>{const body={mode:'active_participant',context:transcript.value,response:document.getElementById('responseDraft').value};const r=await fetch('/api/personal-assistant/meeting-conversation/prepare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(j.response)document.getElementById('responseDraft').value=j.response;document.getElementById('speakStatus').textContent=j.ok?'Speaking: preview ready — approval required':'Speaking: '+j.status;};
+@@ -574,12 +592,15 @@
+  status.textContent=attempt?'Conversation: retrying the participant interaction…':'Conversation: Adam is thinking…';
+  const context=transcript.value.slice(-6000);
+  let r,j;
++ setMeetingReplyTrace(3,'waiting for AI provider',questionId);
+  try{
+   r=await fetch('/api/personal-assistant/meeting-conversation/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,question_id:questionId,direct_question:directQuestion,turn_kind:turnKind,response_required:responseRequired,meeting_context:context,messages:meetingConversationHistory.slice(-10),session_id:meetingConversationSessionId,owner_approved:sessionApproved,representative_mode:representativeMode,owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',authority_profile:(document.getElementById('authorityProfile')||{}).value||'',professional_scope:(document.getElementById('professionalScope')||{}).value||'auto',participation_style:(document.getElementById('participationStyle')||{}).value||'balanced',proactive_reason:proactiveInterventionReason(question),meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',focus_locked:meetingFocusLocked(),focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',continuity_memory:document.getElementById('meetingContinuityMemory').checked,language:document.getElementById('meetingLanguage').value})});
+   j=await r.json().catch(()=>({}));
+  }catch(e){j={};r={ok:false};}
+  if(j&&j.session_id)meetingConversationSessionId=j.session_id;if(j&&j.question_coverage)renderQuestionCoverage(j.question_coverage);
+  if(!r.ok){
++  if(j&&j.duplicate_suppressed){status.textContent='Conversation: duplicate participant turn suppressed — waiting for the original Adam response';return true;}
++  if(j&&j.status==='ai_provider_timeout'){setMeetingReplyTrace(4,'AI provider timeout — question retained',questionId);status.textContent='Conversation: AI provider timed out — the accepted question is retained as unanswered; retry when the provider is ready';return false;}
+   if(representativeMode&&responseRequired&&attempt<1){status.textContent='Conversation: temporary response failure — Adam is retrying once…';await sleepMeeting(900);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired});}
+   status.textContent='Conversation: direct question retained as unanswered — please retry or repeat';return false;
+  }
+@@ -594,6 +615,7 @@
+   if(representativeMode&&responseRequired&&attempt<1){status.textContent='Conversation: empty response — Adam is retrying once…';await sleepMeeting(700);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired});}
+   status.textContent=responseRequired?'Conversation: interaction retained but no reply was produced':'Conversation: no reply required';return false;
+  }
++ setMeetingReplyTrace(4,'AI response received',String(j.question_id||questionId));
+  const clarificationRequested=!!j.clarification_requested;
+  meetingAwaitingClarification=clarificationRequested;
+  meetingClarificationPrompt=clarificationRequested?answer:'';
+@@ -604,13 +626,14 @@
+  meetingIdentityDeclared=true;
+  document.getElementById('responseDraft').value=spoken;
+  rememberAdamVisibleReply(spoken,clarificationRequested);
+- rememberDiscussionRecord(question,answer,j.discussion_topic,j.discussion_status,!!j.followup_bound_to_immediate_thread,j.register_type,j.register_state,!!j.owner_approval_required,!!j.action_candidate,!!j.risk_flag,j.action_origin);
++ rememberDiscussionRecord(question,answer,j.discussion_topic,j.discussion_status,!!j.followup_bound_to_immediate_thread,j.register_type,j.register_state,!!j.owner_approval_required,!!j.action_candidate,!!j.risk_flag,j.action_origin,questionId);
+  meetingConversationHistory.push({role:'user',content:question},{role:'assistant',content:answer});
+  status.textContent=clarificationRequested?'Conversation: Adam is asking the participant to clarify…':'Conversation: speaking in '+(j.reply_language||'English')+'…';
+  try{
+   const v=await speakAdamText(spoken,replyLocale);
++  setMeetingReplyTrace(5,'spoken reply completed',String(j.question_id||questionId));
+   status.textContent=clarificationRequested?'Conversation: clarification requested — listening for the participant to clarify':'Conversation: '+v+' — '+(j.reply_language||'English')+' — ready for follow-up';
+- }catch(e){status.textContent=clarificationRequested?'Conversation: clarification ready; audio unavailable — use Test / Enable Meeting Voice':'Conversation: response ready; audio unavailable — use Test / Enable Meeting Voice';setMeetingVoiceStatus('reply text is ready but playback failed — click Test / Enable Meeting Voice and verify speaker output');}
++ }catch(e){setMeetingReplyTrace(5,'reply recorded — audio unavailable',String(j.question_id||questionId));status.textContent=clarificationRequested?'Conversation: clarification ready; audio unavailable — use Test / Enable Meeting Voice':'Conversation: response ready; audio unavailable — use Test / Enable Meeting Voice';setMeetingVoiceStatus('reply text is ready but playback failed — click Test / Enable Meeting Voice and verify speaker output');}
+  return true;
+ }
+ document.getElementById('generateReport').onclick=async()=>{
+@@ -618,7 +641,7 @@
+  try{
+   const r=await fetch('/api/personal-assistant/meeting-conversation/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId,owner_approved:approved(),meeting_title:document.getElementById('meetingTitle').value,project_reference:document.getElementById('projectReference').value,participants:document.getElementById('meetingParticipants').value,meeting_datetime:document.getElementById('meetingDateTime').value})});
+   const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.status||'meeting_report_failed');box.value=j.report||'';
+-  document.getElementById('out').textContent='Meeting report ready from '+String(j.discussion_record_count||0)+' paired discussion records. Direct-question coverage: '+String(j.answered_question_count||0)+' answered / '+String(j.direct_question_count||0)+'; '+String(j.unanswered_question_count||0)+' unanswered.';
++  document.getElementById('out').textContent='Meeting report ready from '+String(j.discussion_record_count||0)+' paired discussion records. Direct-question coverage: '+String(j.answered_question_count||0)+' answered / '+String(j.direct_question_count||0)+'; '+String(j.processing_question_count||0)+' processing; '+String(j.unanswered_question_count||0)+' unanswered.';
+  }catch(e){box.value='Report generation failed: '+String(e&&e.message||e);}
+ };
+ document.getElementById('downloadReport').onclick=async()=>{

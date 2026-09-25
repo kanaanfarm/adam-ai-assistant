@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adam — Autonomous Meeting Attendance {{ version }}</title>
+<style>
+:root{--ink:#0d1b2a;--muted:#5c6777;--line:#dbe3ee;--soft:#f5f8fc;--accent:#14213d;--ok:#166534;--warn:#9a3412;--bad:#991b1b}
+*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:var(--ink);font-family:Arial,Helvetica,sans-serif}.wrap{max-width:1180px;margin:22px auto;padding:0 18px 40px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:16px}.title h1{margin:0 0 6px;font-size:28px}.title p{margin:0;color:var(--muted)}.badge{background:#e8eef8;border:1px solid #cfd9ea;padding:8px 12px;border-radius:999px;font-size:13px;white-space:nowrap}.grid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px}.card{background:white;border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(15,23,42,.04);margin-bottom:16px}.card h2{margin:0 0 12px;font-size:19px}.note{padding:12px 14px;border-radius:10px;background:#eef5ff;border:1px solid #cfddf5;line-height:1.45}.warning{background:#fff7ed;border-color:#fed7aa}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}label{display:block;font-weight:700;font-size:13px;margin:10px 0 5px}.inline{display:flex;gap:10px;align-items:center}.inline label{margin:0;font-weight:600}.inline input[type=checkbox]{width:auto}input,select,textarea{width:100%;border:1px solid #cfd8e6;border-radius:9px;padding:10px 11px;background:white;color:var(--ink);font:inherit}textarea{min-height:86px;resize:vertical}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}button,.btn{display:inline-block;border:0;border-radius:9px;background:var(--accent);color:white;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none;margin:6px 6px 0 0}.btn2{background:#475569}.btn3{background:#7c2d12}.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.status-item{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--soft)}.status-item b{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.status-item span{font-weight:700}.small{font-size:12px;color:var(--muted);line-height:1.45}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px 7px;vertical-align:top}th{background:var(--soft)}code,pre{background:#f5f7fa;border:1px solid var(--line);border-radius:9px;padding:10px;white-space:pre-wrap;word-break:break-word}.pill{display:inline-block;border-radius:999px;padding:3px 8px;background:#eef2f7;font-size:11px;font-weight:700}.footer-links{margin-top:12px}.calendar-list{max-height:320px;overflow:auto}.event{padding:10px 0;border-bottom:1px solid var(--line)}.event:last-child{border:0}@media(max-width:850px){.grid,.two,.three{grid-template-columns:1fr}.top{display:block}.badge{display:inline-block;margin-top:8px}.status-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="title">
+      <h1>Adam — Autonomous Meeting Attendance</h1>
+      <p>Pre-authorize Adam now so he can prepare for a meeting later without Mohamad operating the meeting page.</p>
+    </div>
+    <div class="badge">{{ version }}</div>
+  </div>
+
+  <div class="note warning" style="margin-bottom:16px">
+    <b>Important:</b> This control center prepares unattended scheduling, calendar discovery, briefing and owner pre-authorization. A real Microsoft Teams / Zoom / Google Meet join remains blocked until Adam has a tested live meeting-platform adapter. Attendance permission never gives Adam authority to approve variations, costs, payments, contractual commitments, purchases, committed dates, or external sends.
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>1. Schedule an Adam Attendance Mission</h2>
+        <div class="two">
+          <div><label>Meeting title</label><input id="title" value="MEP Coordination Meeting"></div>
+          <div><label>Project / reference</label><input id="project" placeholder="Tower"></div>
+        </div>
+        <div class="two">
+          <div><label>Platform</label><select id="platform"><option value="microsoft_teams">Microsoft Teams</option><option value="zoom">Zoom</option><option value="google_meet">Google Meet</option></select></div>
+          <div><label>Participation style</label><select id="style"><option value="balanced" selected>Balanced — recommended</option><option value="conservative">Conservative</option><option value="proactive">Proactive</option></select></div>
+        </div>
+        <label>Meeting join link</label><input id="meetingRef" placeholder="Paste Teams / Zoom / Google Meet join URL">
+        <div class="two">
+          <div><label>Start date/time</label><input id="startAt" type="datetime-local"></div>
+          <div><label>Duration (minutes)</label><input id="duration" type="number" min="10" max="480" value="60"></div>
+        </div>
+        <label>Participants</label><input id="participants" placeholder="Mohamad / A&B / Contractor / Consultant">
+        <label>Owner briefing / position</label><textarea id="briefing" placeholder="Example: Attend for Tower MEP coordination. Do not approve variations or costs. Obtain the revised hydraulic calculation and protect ceiling coordination."></textarea>
+        <div class="note" style="margin-top:10px"><b>Adam may:</b> listen, answer professional questions, ask clarification, record actions/risks, and make technical recommendations. <b>Adam may not:</b> create consequential commitments on Mohamad's behalf.</div>
+        <div class="inline" style="margin-top:12px"><input id="preapproved" type="checkbox"><label for="preapproved">Owner pre-approval — Adam may attend and represent me in this specific meeting when it starts.</label></div>
+        <button onclick="scheduleMission()">Schedule Adam</button>
+        <pre id="missionOut">Ready.</pre>
+      </div>
+
+      <div class="card">
+        <h2>2. Standing Calendar Attendance Policy</h2>
+        <p class="small">Optional. This lets the unattended worker read upcoming Outlook calendar meetings and prepare matching online meetings automatically after one standing owner approval.</p>
+        <div class="inline"><input id="policyEnabled" type="checkbox"><label for="policyEnabled">Enable standing attendance policy</label></div>
+        <div class="inline"><input id="calendarDiscovery" type="checkbox"><label for="calendarDiscovery">Automatically discover upcoming online meetings from Outlook</label></div>
+        <label>Allowed project/title keywords (optional, comma separated)</label><input id="keywords" placeholder="Tower, MEP, Coordination">
+        <div class="two"><div><label>Prepare before meeting (minutes)</label><input id="prepareEarly" type="number" min="2" max="60" value="10"></div><div><label>Join window opens before meeting (minutes)</label><input id="joinEarly" type="number" min="0" max="15" value="2"></div></div>
+        <div class="inline" style="margin-top:10px"><input id="policyApproved" type="checkbox"><label for="policyApproved">Owner Approval for this standing attendance policy</label></div>
+        <button onclick="savePolicy()">Save Standing Policy</button>
+        <button class="btn2" onclick="loadCalendar(false)">Read Upcoming Outlook Meetings</button>
+        <button class="btn2" onclick="loadCalendar(true)">Discover + Prepare Matching Meetings</button>
+        <pre id="policyOut">Ready.</pre>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Readiness</h2>
+        <div class="status-grid">
+          <div class="status-item"><b>Unattended Worker</b><span id="workerStatus">Checking…</span></div>
+          <div class="status-item"><b>AI Provider</b><span id="aiStatus">Checking…</span></div>
+          <div class="status-item"><b>Outlook Calendar</b><span id="calendarStatus">Checking…</span></div>
+          <div class="status-item"><b>Live Meeting Adapter</b><span id="adapterStatus">Checking…</span></div>
+        </div>
+        <p id="readinessNote" class="small"></p>
+        <button onclick="checkNow()">Check Now</button>
+        <button class="btn2" onclick="refreshAll()">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2>Upcoming Outlook Meetings</h2>
+        <div id="calendarEvents" class="calendar-list"><span class="small">Press “Read Upcoming Outlook Meetings”.</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Attendance Missions</h2>
+        <div style="overflow:auto"><table><thead><tr><th>Meeting</th><th>Start</th><th>Status</th><th>Action</th></tr></thead><tbody id="missionsBody"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+        <pre id="briefOut" style="display:none"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>How unattended attendance works</h2>
+    <p><b>Owner pre-approval → scheduler → pre-meeting briefing → live platform adapter → Real Meeting Representative → MOM / actions / owner escalation.</b></p>
+    <p class="small">In this build, the scheduler and briefing stages are operational. Live join is intentionally blocked until a real meeting-platform adapter is connected and tested. This prevents Adam from claiming that he joined a meeting when he did not.</p>
+    <div class="footer-links"><a class="btn2 btn" href="/meeting-attendance">Open Real Meeting Attendance</a><a class="btn2 btn" href="/meeting-platform">Open Meeting Platform Adapter</a><a class="btn2 btn" href="/">Back to Adam</a></div>
+  </div>
+</div>
+<script>
+function isoFromLocal(v){if(!v)return '';const d=new Date(v);return isNaN(d.getTime())?'':d.toISOString();}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function setText(id,v){document.getElementById(id).textContent=v;}
+async function jsonFetch(url,opts){const r=await fetch(url,opts);let data={};try{data=await r.json()}catch(e){data={ok:false,error:'Invalid server response'}}return {r,data};}
+function defaultStart(){const d=new Date(Date.now()+60*60*1000);d.setSeconds(0,0);const off=d.getTimezoneOffset();const local=new Date(d.getTime()-off*60000).toISOString().slice(0,16);document.getElementById('startAt').value=local;}
+async function scheduleMission(){
+ const body={title:title.value,project_reference:project.value,platform:platform.value,meeting_ref:meetingRef.value,start_at:isoFromLocal(startAt.value),duration_minutes:Number(duration.value||60),participants:participants.value,owner_briefing:briefing.value,participation_style:style.value,owner_preapproved:preapproved.checked};
+ const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/missions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});missionOut.textContent=JSON.stringify(data,null,2);await loadMissions();await loadStatus();
+}
+async function savePolicy(){
+ const ks=keywords.value.split(',').map(x=>x.trim()).filter(Boolean);
+ const body={enabled:policyEnabled.checked,owner_approved:policyApproved.checked,calendar_auto_discovery:calendarDiscovery.checked,online_only:true,default_style:'balanced',allowed_project_keywords:ks,prepare_early_minutes:Number(prepareEarly.value||10),join_early_minutes:Number(joinEarly.value||2)};
+ const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/policy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});policyOut.textContent=JSON.stringify(data,null,2);await loadStatus();
+}
+async function loadPolicy(){const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/policy');const p=data.standing_policy||{};policyEnabled.checked=!!p.enabled;calendarDiscovery.checked=!!p.calendar_auto_discovery;prepareEarly.value=p.prepare_early_minutes??10;joinEarly.value=p.join_early_minutes??2;keywords.value=(p.allowed_project_keywords||[]).join(', ');}
+async function loadStatus(){
+ const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/status');
+ workerStatus.textContent=data.worker_running?'RUNNING':'starts with Adam app';workerStatus.className=data.worker_running?'ok':'warn';
+ aiStatus.textContent=data.ai_provider_ready?'READY':'NOT CONFIGURED';aiStatus.className=data.ai_provider_ready?'ok':'bad';
+ calendarStatus.textContent=data.calendar_connected?'CONNECTED':'NOT CONNECTED';calendarStatus.className=data.calendar_connected?'ok':'warn';
+ adapterStatus.textContent=data.live_meeting_platform_adapter_ready?'LIVE READY':'NOT YET CONNECTED';adapterStatus.className=data.live_meeting_platform_adapter_ready?'ok':'bad';
+ readinessNote.textContent=data.live_meeting_platform_adapter_ready?'Adam can proceed to the configured live join boundary for pre-authorized missions.':'Scheduling, calendar discovery and briefing are ready. Real unattended Teams/Zoom/Meet joining is still blocked by the missing live meeting-platform adapter.';
+}
+async function loadMissions(){
+ const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/missions');const rows=data.missions||[];missionsBody.innerHTML='';
+ if(!rows.length){missionsBody.innerHTML='<tr><td colspan="4">No missions scheduled.</td></tr>';return;}
+ for(const m of rows){const tr=document.createElement('tr');const status=esc(m.status||'');tr.innerHTML=`<td><b>${esc(m.title)}</b><br><span class="small">${esc(m.project_reference||'')}</span></td><td>${esc(m.start_at||'')}</td><td><span class="pill">${status}</span><br><span class="small">${esc(m.status_reason||'')}</span></td><td><button class="btn2" onclick="showBrief('${esc(m.id)}')">Brief</button>${!['completed','cancelled','missed'].includes(m.status)?`<button class="btn3" onclick="cancelMission('${esc(m.id)}')">Cancel</button>`:''}</td>`;missionsBody.appendChild(tr);}
+}
+async function showBrief(id){const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/missions/'+encodeURIComponent(id)+'/brief');briefOut.style.display='block';briefOut.textContent=data.brief||JSON.stringify(data,null,2);}
+async function cancelMission(id){const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/missions/'+encodeURIComponent(id)+'/cancel',{method:'POST'});briefOut.style.display='block';briefOut.textContent=JSON.stringify(data,null,2);await loadMissions();}
+async function checkNow(){const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/check-now',{method:'POST'});briefOut.style.display='block';briefOut.textContent=JSON.stringify(data,null,2);await loadMissions();await loadStatus();}
+async function loadCalendar(ingest){
+ const {data}=await jsonFetch('/api/personal-assistant/autonomous-meeting-attendance/calendar/upcoming?hours=48&ingest='+(ingest?'1':'0'));policyOut.textContent=JSON.stringify({status:data.status,event_count:data.event_count,online_meeting_count:data.online_meeting_count,created_count:data.created_count,error:data.error||''},null,2);
+ const rows=data.events||[];calendarEvents.innerHTML='';if(!rows.length){calendarEvents.innerHTML='<span class="small">No upcoming calendar meetings returned.</span>';return;}
+ for(const e of rows){const div=document.createElement('div');div.className='event';div.innerHTML=`<b>${esc(e.title)}</b><br><span class="small">${esc(e.start_at||'')} — ${esc(e.platform||'')} ${e.online_meeting?'• online meeting link available':'• no join link'}</span>`;calendarEvents.appendChild(div);}if(ingest)await loadMissions();
+}
+async function refreshAll(){await Promise.all([loadStatus(),loadMissions(),loadPolicy()]);}
+defaultStart();refreshAll();
+</script>
+</body>
+</html>

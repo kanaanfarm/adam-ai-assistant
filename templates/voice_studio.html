@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voice Studio</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f4f6;margin:0;color:#111827}.wrap{max-width:900px;margin:25px auto;padding:15px}
+.card{background:white;padding:18px;border-radius:14px;margin:12px 0;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+.profile{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border-top:1px solid #eee;padding:15px 0}
+button,a{font:inherit;padding:10px 13px;border:1px solid #bbb;border-radius:8px;background:white;color:#111827;text-decoration:none;cursor:pointer}
+button.primary{background:#111827;color:white}.small{color:#6b7280;font-size:13px}.status{margin-top:8px;font-size:13px}
+@media(max-width:600px){.profile{grid-template-columns:1fr}.wrap{margin:0;padding:8px}}
+</style></head><body><div class="wrap">
+<div class="card"><h1>Lebanese Voice Studio</h1>
+<p>Listen to five fictional Lebanese character styles using the same sentence. Each sample is generated locally through your configured OpenAI API key.</p>
+<p dir="rtl"><b>{{ sample_text }}</b></p>
+<a href="/">← Back to Assistant</a>
+</div>
+<div class="card">
+{% for id,p in profiles.items() %}
+<div class="profile">
+<div><h3>Voice {{ id }} — {{ p.name }}</h3><div class="small">Original fictional character profile. Not an imitation of a real person.</div><div id="s{{id}}" class="status"></div></div>
+<button class="primary" onclick="playSample('{{id}}')">▶ Generate & Play</button>
+</div>
+{% endfor %}
+</div>
+
+<div class="card">
+<h2>Lebanese Speech Normalizer</h2>
+<p>Voice 1 + Voice 3 are now blended as the selected permanent voice. Test how formal Arabic will be rewritten before speech.</p>
+<textarea id="normInput" style="width:100%;min-height:100px;padding:10px;font:inherit" placeholder="Paste Arabic text here...">ماذا تريد أن نفعل اليوم؟ يمكنني مساعدتك الآن.</textarea>
+<div style="margin-top:8px"><button class="primary" onclick="previewLebanese()">Preview Lebanese</button></div>
+<div id="normResult" dir="rtl" style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:8px"></div>
+</div>
+
+<div class="card"><b>After listening:</b> tell ChatGPT which characteristics you like, for example: “2 + warmth of 1 + Lebanese style of 3.” We can then make that the final character profile.</div>
+</div>
+<script>
+let audio=null;
+async function playSample(id){
+ const st=document.getElementById('s'+id);st.textContent='Generating sample…';
+ try{
+  if(audio){audio.pause();audio=null}
+  const r=await fetch('/api/voice-studio/'+id);
+  if(!r.ok){let d={};try{d=await r.json()}catch(e){}throw new Error(d.error||'Generation failed')}
+  const blob=await r.blob(),url=URL.createObjectURL(blob);
+  audio=new Audio(url);audio.onplay=()=>st.textContent='Playing…';audio.onended=()=>{st.textContent='Finished';URL.revokeObjectURL(url)};
+  await audio.play();
+ }catch(e){st.textContent='Error: '+e.message}
+}
+
+async function previewLebanese(){
+ const input=document.getElementById('normInput').value;
+ const out=document.getElementById('normResult');
+ out.textContent='Converting…';
+ try{
+  const r=await fetch('/api/lebanese-preview',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:input})
+  });
+  const d=await r.json();
+  out.textContent=d.ok?((d.lebanese||'')+'\n\nPronunciation-ready:\n'+(d.pronunciation_ready||d.lebanese||'')):('Error: '+(d.error||'Failed'));
+ }catch(e){out.textContent='Error: '+e.message}
+}
+</script></body></html>

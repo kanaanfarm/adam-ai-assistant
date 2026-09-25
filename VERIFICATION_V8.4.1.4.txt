@@ -1,0 +1,17 @@
+Adam Acquisition v8.4.1.4 — Persistent AI Settings + Provider Diagnostic Fix
+Targeted static/pure verification: 11/11 PASS
+
+1. Version bump: PASS
+2. Per-user persistent AI settings path: PASS
+3. Legacy /chat/completions root normalization: PASS
+4. Legacy /responses root normalization: PASS
+5. Official OpenAI root -> /v1 normalization: PASS
+6. Transport-level endpoint normalization: PASS
+7. Responses store:false: PASS
+8. GPT-5.6 low reasoning retained: PASS
+9. Generic meeting failure auto-runs /api/ai-test diagnostic: PASS
+10. Provider diagnostic becomes visible to owner: PASS
+11. AI Settings explains cross-upgrade persistence: PASS
+
+No live external provider request was executed in package verification; owner API key is never included in the package.
+Previously approved acceptance tests remain carried forward; only the affected provider path should be retested by the owner.

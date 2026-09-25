@@ -1,0 +1,221 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contacts</title>
+<style>
+body{font-family:Arial;background:#f3f4f6;margin:0;color:#111827}
+.wrap{max-width:950px;margin:24px auto;padding:14px}
+.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}
+input,textarea,select{width:100%;box-sizing:border-box;padding:9px;margin:5px 0 10px;font:inherit}
+textarea{min-height:70px}
+button,a{padding:9px 12px;border:1px solid #bbb;border-radius:8px;background:white;color:#111827;text-decoration:none;cursor:pointer}
+.primary{background:#111827;color:white}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.contact{border-top:1px solid #ddd;padding:12px 0}
+.small{font-size:13px;color:#6b7280}
+.ok{color:#067647}.err{color:#b42318}
+@media(max-width:650px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div style="max-width:760px;margin:10px auto;padding:8px 12px;background:#e8f5e9;border:1px solid #9ccc9c;border-radius:8px;font-weight:700;">PRE-SALE ISOLATION V3 — buyer-local contacts storage</div>
+<div class="wrap">
+<div class="card">
+<h1>Contacts</h1>
+<a href="/">← Back</a>
+<p class="small">Save a person once. Smart Email can recognize the name and fill the email address automatically.</p>
+</div>
+
+<div class="card">
+<h2 id="formTitle">Add Contact</h2>
+<div class="row">
+<div><label>Name</label><input id="name"></div>
+<div><label>Email</label><input id="email" type="email"></div>
+<div><label>Phone</label><input id="phone"></div>
+<div><label>Company</label><input id="company"></div>
+<div><label>Position / Job Title</label><input id="position"></div>
+</div>
+
+<label>Preferred language</label>
+<select id="language">
+<option>English</option>
+<option>Arabic</option>
+<option>French</option>
+<option>Spanish</option>
+</select>
+
+<label>Keywords / Aliases</label><input id="aliases" placeholder="Morgan, Alex Morgan, Test"><div class="small">Separate keywords with commas.</div><br><label>Notes</label>
+<textarea id="notes" placeholder="Job title, project, preferred wording, etc."></textarea>
+
+<button class="primary" id="save">Save Contact</button> <button id="cancelEdit" style="display:none">Cancel Edit</button><div class="small" style="margin-top:6px">Contacts are stored persistently and kept when you upgrade Adam.</div>
+<div id="msg" class="small" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+<h2>Saved Contacts</h2>
+<div id="list"></div>
+</div>
+</div>
+
+<script>
+const q=id=>document.getElementById(id);
+let editingContactId=null;
+let cachedContacts=[];
+
+function esc(s){
+  return String(s||'').replace(/[&<>"']/g,m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+function render(contacts){
+  cachedContacts=contacts||[];
+  q('list').innerHTML=cachedContacts.map(c=>`
+    <div class="contact">
+      <b>${esc(c.name)}</b> — ${esc(c.email||'')}<br>
+      <span class="small">
+        ${esc(c.company||'')}${c.position?' • '+esc(c.position):''}
+        ${c.phone?' • '+esc(c.phone):''}
+        ${c.language?' • '+esc(c.language):''}
+      </span><br>
+      ${c.aliases&&c.aliases.length?'<span class="small">Aliases: '+esc(c.aliases.join(', '))+'</span><br>':''}
+      ${c.notes?'<span class="small">'+esc(c.notes)+'</span><br>':''}
+      <button onclick="editContact('${esc(c.id)}')">Edit</button>
+      <button onclick="delContact('${esc(c.id)}')">Delete</button>
+    </div>
+  `).join('') || '<span class="small">No contacts saved yet.</span>';
+}
+
+function clearForm(){
+  q('name').value='';
+  q('email').value='';
+  q('phone').value='';
+  q('company').value='';
+  if(q('position')) q('position').value='';
+  q('language').value='English';
+  q('aliases').value='';
+  q('notes').value='';
+}
+
+function exitEditMode(clear=true){
+  editingContactId=null;
+  q('formTitle').textContent='Add Contact';
+  q('save').textContent='Save Contact';
+  q('cancelEdit').style.display='none';
+  if(clear) clearForm();
+}
+
+function editContact(id){
+  const c=cachedContacts.find(x=>String(x.id)===String(id));
+  if(!c) return;
+
+  editingContactId=String(c.id);
+  q('name').value=c.name||'';
+  q('email').value=c.email||'';
+  q('phone').value=c.phone||'';
+  q('company').value=c.company||'';
+  if(q('position')) q('position').value=c.position||'';
+  q('language').value=c.language||'English';
+  q('aliases').value=Array.isArray(c.aliases)?c.aliases.join(', '):(c.aliases||'');
+  q('notes').value=c.notes||'';
+
+  q('formTitle').textContent='Edit Contact';
+  q('save').textContent='Save Changes';
+  q('cancelEdit').style.display='inline-block';
+  q('msg').className='small';
+  q('msg').textContent='Editing '+(c.name||'contact');
+  window.scrollTo({top:0,behavior:'smooth'});
+  q('name').focus();
+}
+
+q('cancelEdit').onclick=()=>{
+  exitEditMode(true);
+  q('msg').textContent='Edit cancelled.';
+};
+
+async function refresh(){
+  try{
+    const r=await fetch('/api/v376/contacts',{cache:'no-store'});
+    const raw=await r.text();
+    let d;
+    try { d=JSON.parse(raw); }
+    catch (_) { throw new Error('Server returned HTTP '+r.status+' instead of JSON. '+raw.slice(0,120)); }
+    if(!d.ok) throw new Error(d.error||'Could not load contacts');
+    render(d.contacts);
+  }catch(e){
+    q('list').innerHTML='<span class="err">Load error: '+esc(e.message)+'</span>';
+  }
+}
+
+q('save').onclick=async()=>{
+  const btn=q('save');
+  const msg=q('msg');
+  btn.disabled=true;
+  msg.className='small';
+  msg.textContent=editingContactId?'Saving changes…':'Saving…';
+
+  try{
+    const payload={
+      name:q('name').value,
+      email:q('email').value,
+      phone:q('phone').value,
+      company:q('company').value,
+      position:q('position')?q('position').value:'',
+      language:q('language').value,
+      notes:q('notes').value,
+      aliases:q('aliases').value
+    };
+
+    const url=editingContactId
+      ? '/api/v376/contacts/'+encodeURIComponent(editingContactId)
+      : '/api/v376/contacts';
+
+    const r=await fetch(url,{
+      method:editingContactId?'PUT':'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+
+    const raw=await r.text();
+    let d;
+    try { d=JSON.parse(raw); }
+    catch (_) { throw new Error('Server returned HTTP '+r.status+' instead of JSON. '+raw.slice(0,120)); }
+
+    if(!r.ok || !d.ok) throw new Error(d.error||('HTTP '+r.status));
+
+    const wasEditing=!!editingContactId;
+    render(d.contacts||[]);
+    exitEditMode(true);
+    msg.className='small ok';
+    msg.textContent=wasEditing
+      ? 'Contact updated successfully: '+(d.contact?.name||payload.name)
+      : 'Saved successfully: '+(d.contact?.name||payload.name);
+  }catch(e){
+    msg.className='small err';
+    msg.textContent=(editingContactId?'Update error: ':'Save error: ')+e.message;
+  }finally{
+    btn.disabled=false;
+  }
+};
+
+async function delContact(id){
+  if(!confirm('Delete this contact?')) return;
+  const r=await fetch('/api/v376/contacts/'+encodeURIComponent(id),{method:'DELETE'});
+  const raw=await r.text();
+  let d;
+  try { d=JSON.parse(raw); }
+  catch (_) { throw new Error('Server returned HTTP '+r.status+' instead of JSON. '+raw.slice(0,120)); }
+  if(d.ok){
+    if(editingContactId===String(id)) exitEditMode(true);
+    render(d.contacts||[]);
+  } else {
+    alert(d.error||'Delete failed');
+  }
+}
+
+refresh();
+</script>
+</body>
+</html>

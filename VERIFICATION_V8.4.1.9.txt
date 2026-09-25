@@ -1,0 +1,24 @@
+Adam Acquisition v8.4.1.9 — Meeting Response Latency Fast Path + Timing Diagnostics
+
+Verification performed:
+- 14/14 new v8.4.1.9 targeted tests: PASS
+- app.py Python syntax/compile: PASS
+- real_meeting_attendance.html JavaScript syntax: PASS (Node --check)
+
+Key verified behavior:
+1. Version bumped to v8.4.1.9.
+2. v8.4.1.6 full 4200 ms natural-pause boundary remains present.
+3. Fast meeting response uses 2400 ms only for short turns and falls back to 4200 ms for longer spoken turns.
+4. Clearly complete direct questions can use a 350 ms post-transcription merge grace; incomplete/non-direct turns retain the 1500 ms grace.
+5. Latency diagnostics include speech-end, STT, focus/merge, AI, provider, voice-prep, and total-to-voice-start timing fields.
+6. Short self-contained factual questions are eligible for the compact AI path.
+7. Approval/change/proceed and other consequential questions are excluded from the compact AI path.
+8. Contextual follow-ups, clarification turns, and proactive interventions are excluded from the compact AI path.
+9. Compact factual replies use a 320-token budget while the normal meeting path retains 700.
+10. Compact prompt explicitly preserves owner/governance boundaries.
+11. Fast meeting voice uses 140-character speech chunks for earlier first-audio start.
+12. Speaker protection remains active across chunks until the final chunk completes.
+13. Voice-start timing is recorded only when actual playback starts.
+14. Existing five-stage meeting reply trace contract remains present, including “spoken reply completed”.
+
+No live provider/network timing can be certified in the offline package verification environment; the owner physical test must confirm the actual response-time improvement on the deployed machine/network.

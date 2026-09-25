@@ -1,0 +1,108 @@
+--- /mnt/data/adam8417/app.py.before8417	2026-09-10 19:34:18.062537895 +0000
++++ /mnt/data/adam8417/app.py	2026-09-10 19:34:18.641418428 +0000
+@@ -188,7 +188,7 @@
+ from adam_core.meeting_language_policy import DEFAULT_REPLY_LANGUAGE, detect_requested_reply_language, tts_locale_for_reply, professional_scope_prompt
+ from adam_core.meeting_focus_engine import evaluate_meeting_focus, detect_explicit_project_mismatch, self_test as meeting_focus_self_test
+ 
+-VERSION = "v8.4.1.6"
++VERSION = "v8.4.1.7"
+ BASELINE_VERSION = "v0.8.0.1"
+ BUILD_CHANNEL = "acquisition"
+ 
+@@ -7587,6 +7587,40 @@
+     return bool(missing and not true_clarify)
+ 
+ 
++def _meeting_explicit_owner_approval_gate(question, answer, status):
++    """Return True only when the paired exchange itself carries an owner approval gate.
++
++    v8.4.1.7: meeting reports previously could show `Owner approval required: No`
++    while the same paired answer said the proposal must be verified before Mohamad
++    approves it. Keep the governance flag evidence-bounded, but recognize explicit
++    owner/Mohamad approval wording and explicit approval-gated technical changes.
++    """
++    q = re.sub(r"\s+", " ", str(question or "").strip().lower())
++    a = re.sub(r"\s+", " ", str(answer or "").strip().lower())
++    combined = q + " " + a
++    if str(status or "") == "Not approved":
++        return True
++    explicit_owner_phrases = (
++        "owner approval required", "owner approval", "owner's approval", "owner’s approval",
++        "mohamad approval", "mohamad's approval", "mohamad’s approval",
++        "before mohamad approves", "until mohamad approves",
++        "for mohamad approval", "for mohamad's approval", "for mohamad’s approval",
++    )
++    if any(p in combined for p in explicit_owner_phrases):
++        return True
++    approval_gate_phrases = (
++        "before any change is approved", "before the change is approved",
++        "before approval of any change", "pending approval", "subject to approval",
++        "before final approval", "until approved",
++    )
++    technical_change_terms = (
++        "pipe size", "100 mm", "125 mm", "chilled water", "chilled-water",
++        "variation", "cost", "change", "proposal", "proceed", "confirm",
++    )
++    return bool(any(p in combined for p in approval_gate_phrases) and
++                any(t in combined for t in technical_change_terms))
++
++
+ def _meeting_register_classification(question, answer, status, proactive_reason=""):
+     """Evidence-bounded live register classification for the current meeting.
+ 
+@@ -7606,7 +7640,10 @@
+         "clash", "pressure drop", "high velocity", "undersized", "overload",
+         "non-compliance", "noncompliance", "safety", "fire", "leak", "failure"
+     )
+-    owner_approval_required = status == "Not approved" or any(t in q for t in consequential_terms)
++    owner_approval_required = (
++        _meeting_explicit_owner_approval_gate(question, answer, status)
++        or any(t in q for t in consequential_terms)
++    )
+     information_required = status in {"Information required", "Information unavailable"}
+     participant_action = any(
+         t in q for t in ("please provide", "please submit", "must provide", "must submit", "to submit", "to provide", "action item", "will submit", "will provide")
+@@ -8345,16 +8382,25 @@
+         "Meeting date/time: " + (meeting_datetime or "Not stated") + "\n"
+         "Participants: " + (participants or "Not stated")
+     )
++    owner_approval_required_count = sum(1 for rec in records if rec.get("owner_approval_required"))
++    owner_approval_required_any = bool(owner_approval_required_count)
++    governance_evidence = (
++        f"Owner approval required in retained paired evidence: {'Yes' if owner_approval_required_any else 'No'}; "
++        f"records requiring owner approval: {owner_approval_required_count}."
++    )
+     report_prompt = (
+         "Prepare a concise professional Minutes of Meeting / Meeting Report using ONLY the metadata and paired discussion evidence below. "
+         "Do not invent attendees, dates, approvals, decisions, costs, due dates, document numbers, or facts. "
+         "Clearly distinguish confirmed decisions from recommendations, proposals, information requests, and items not approved. Never convert Adam's recommendation into a participant-assigned action. Only put an item under ACTION ITEMS when the paired evidence says Action origin: Participant-assigned action or the participant explicitly assigned it; put Adam-originated suggestions under ADAM RECOMMENDATIONS. "
++        "Treat the OWNER-APPROVAL GOVERNANCE EVIDENCE and each paired record's 'Owner approval required: Yes/No' field as authoritative. Never state 'Owner approval required: No' for an item whose retained evidence says Yes. Never invent a Mohamad/owner approval requirement when the retained evidence says No and the paired text does not explicitly require it. "
++        "If a paired exchange says a technical change must be verified before Mohamad/owner approves it, keep that item open and owner-approval-required; do not simultaneously label owner approval as No. "
+         "Where a responsible person or due date was not stated, write 'Not stated'. "
+         "Use these sections exactly: EXECUTIVE SUMMARY; TECHNICAL / PROFESSIONAL DISCUSSIONS; CONFIRMED DECISIONS; ITEMS NOT APPROVED / OWNER APPROVAL REQUIRED; ACTION ITEMS; ADAM RECOMMENDATIONS; OPEN / UNRESOLVED ITEMS; QUESTION COVERAGE / UNANSWERED ITEMS; MEETING FOCUS / FILTERING; DOCUMENTS / CALCULATIONS REQUIRED; NEXT STEPS. "
+         "In QUESTION COVERAGE / UNANSWERED ITEMS, state the direct-question coverage totals and list every clarification-required or unanswered direct question. Do not claim a question was answered if its coverage state says otherwise. "
+         "Keep technical figures and units exact. Include the meeting metadata at the top without inventing missing values.\n\nMEETING METADATA:\n" + metadata +
+         f"\nQuestion coverage: {coverage_answered} answered / {coverage_total} direct questions; {coverage_clarify} clarification required; {coverage_processing} processing; {coverage_unanswered} unanswered.\n" +
+         f"Meeting focus: {focus_accepted} utterances accepted into the formal meeting pipeline; {focus_rejected} side-room/background candidates filtered before formal meeting memory. Rejected conversation text was not retained by the focus history.\n" +
++        "OWNER-APPROVAL GOVERNANCE EVIDENCE:\n" + governance_evidence + "\n" +
+         "\nPAIRED MEETING DISCUSSION RECORD:\n" + evidence +
+         "\n\nACCEPTED TURN STATUS RECORD:\n" + accepted_processing_evidence +
+         "\n\nDIRECT-QUESTION COVERAGE RECORD:\n" + coverage_evidence
+@@ -8369,7 +8415,7 @@
+         "\n\n## TECHNICAL / PROFESSIONAL DISCUSSIONS\n" + evidence +
+         ("\n\nAccepted turns awaiting completion:\n" + accepted_processing_evidence if coverage_processing else "") +
+         "\n\n## CONFIRMED DECISIONS\nNone recorded unless explicitly shown in the paired discussion evidence." +
+-        "\n\n## ITEMS NOT APPROVED / OWNER APPROVAL REQUIRED\nReview entries marked Not approved or Owner approval required." +
++        "\n\n## ITEMS NOT APPROVED / OWNER APPROVAL REQUIRED\n" + governance_evidence + " Review entries marked Not approved or Owner approval required." +
+         "\n\n## ACTION ITEMS\nOnly participant-assigned actions belong here; Adam recommendations are not converted into assigned actions." +
+         "\n\n## ADAM RECOMMENDATIONS\nSee completed paired discussion evidence; no recommendation is inferred from a Processing turn." +
+         "\n\n## OPEN / UNRESOLVED ITEMS\n" + (accepted_processing_evidence if coverage_processing else "See paired discussion statuses above.") +
+@@ -8391,7 +8437,7 @@
+             report = call_ai(report_prompt, "English", max_tokens=1800).strip()
+         except Exception:
+             report = deterministic_report
+-    return jsonify({"ok": True, "status": "meeting_report_ready", "report": report, "session_id": sid, "discussion_record_count": len(records), "meeting_title": meeting_title, "project_reference": project_reference, "participants": participants, "meeting_datetime": meeting_datetime, "paired_evidence_only": True, "live_register_included": True, "question_coverage_included": True, "meeting_focus_included": True, "focus_accepted_count": focus_accepted, "focus_rejected_count": focus_rejected, "direct_question_count": coverage_total, "answered_question_count": coverage_answered, "clarification_question_count": coverage_clarify, "processing_question_count": coverage_processing, "unanswered_question_count": coverage_unanswered, "accepted_turn_count": len(accepted_turns), "screen_clear_memory_retained": True, "owner_gate_preserved": True, "external_action_executed": False, "version": VERSION})
++    return jsonify({"ok": True, "status": "meeting_report_ready", "report": report, "session_id": sid, "discussion_record_count": len(records), "meeting_title": meeting_title, "project_reference": project_reference, "participants": participants, "meeting_datetime": meeting_datetime, "paired_evidence_only": True, "live_register_included": True, "question_coverage_included": True, "meeting_focus_included": True, "focus_accepted_count": focus_accepted, "focus_rejected_count": focus_rejected, "direct_question_count": coverage_total, "answered_question_count": coverage_answered, "clarification_question_count": coverage_clarify, "processing_question_count": coverage_processing, "unanswered_question_count": coverage_unanswered, "accepted_turn_count": len(accepted_turns), "owner_approval_required_any": owner_approval_required_any, "owner_approval_required_count": owner_approval_required_count, "approval_status_consistency_guard": True, "screen_clear_memory_retained": True, "owner_gate_preserved": True, "external_action_executed": False, "version": VERSION})
+ 
+ 
+ @app.route("/api/personal-assistant/meeting-conversation/report.docx", methods=["POST"])

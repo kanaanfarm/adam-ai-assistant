@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inbox Command Center</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#172033;--muted:#697386;--line:#dce2ea;--dark:#111827;--good:#067647;--bad:#b42318;--warn:#b54708;--blue:#175cd3}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1250px;margin:24px auto;padding:0 18px}
+.header,.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 5px 18px rgba(17,24,39,.04)}
+.header{padding:20px 22px;margin-bottom:16px}.card{padding:18px}
+h1{margin:0 0 6px;font-size:27px}h2{margin:0 0 12px;font-size:18px}
+.small{font-size:13px;color:var(--muted)}
+.actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+button,a.btn{padding:9px 12px;border:1px solid #c8ced8;border-radius:8px;background:#fff;color:var(--text);text-decoration:none;cursor:pointer;font-weight:600}
+button.primary{background:var(--dark);color:#fff;border-color:var(--dark)}
+button:disabled{opacity:.55;cursor:not-allowed}
+.layout{display:grid;grid-template-columns:390px 1fr;gap:16px}
+.list{height:690px;overflow:auto;padding:0}
+.mail{padding:13px 14px;border-bottom:1px solid #e8edf3;cursor:pointer;background:#fff}
+.mail:hover{background:#f8fafc}.mail.selected{background:#eef4ff}.mail.unread .subject{font-weight:700}
+.subject{font-size:14px;margin-bottom:4px}.sender{font-size:13px;font-weight:600}.preview{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.35}
+.meta{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--muted);margin-top:6px}
+.detail{min-height:690px}
+.emailbox{background:#f8fafc;border:1px solid #e3e8ef;border-radius:10px;padding:14px;max-height:280px;overflow:auto;white-space:pre-wrap;line-height:1.5}
+.analysis{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.panel{border:1px solid var(--line);border-radius:10px;padding:13px;background:#fff}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.high{background:#fef3f2;color:#b42318}.medium{background:#fffaeb;color:#b54708}.low{background:#ecfdf3;color:#067647}
+textarea{width:100%;min-height:150px;padding:11px;border:1px solid #cbd2dc;border-radius:8px;font:inherit;resize:vertical}
+.checkbox{display:flex;gap:8px;align-items:center;font-size:14px}.checkbox input{width:auto}
+.status{padding:11px 13px;border-radius:8px;margin-top:10px;display:none}
+.status.good{display:block;background:#ecfdf3;color:var(--good);border:1px solid #abefc6;font-weight:700}
+.status.bad{display:block;background:#fef3f2;color:var(--bad);border:1px solid #fecdca;font-weight:700}
+.status.warn{display:block;background:#fffaeb;color:var(--warn);border:1px solid #fedf89;font-weight:700}
+ul{margin:7px 0 0 18px;padding:0}
+.dashboard{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.metric{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:13px}
+.metric .num{font-size:24px;font-weight:800;margin-top:4px}
+.commandbar{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:16px}
+.searchrow{display:flex;gap:8px}.searchrow input{flex:1;padding:10px 12px;border:1px solid #cbd2dc;border-radius:8px;font:inherit}
+.briefbox{background:#f8fafc;border:1px solid #e3e8ef;border-radius:10px;padding:13px;margin-top:10px;display:none;line-height:1.5}
+.cat{font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;display:inline-block;margin-top:5px}
+.cat-Urgent{background:#fef3f2;color:#b42318}.cat-Action-Required{background:#fffaeb;color:#b54708}.cat-FYI{background:#eff8ff;color:#175cd3}.cat-Low-Priority{background:#f2f4f7;color:#475467}
+@media(max-width:900px){.dashboard{grid-template-columns:repeat(2,1fr)}{.layout{grid-template-columns:1fr}.list{height:420px}.detail{min-height:auto}.analysis{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Inbox Command Center</h1>
+    <div class="small">Executive Outlook inbox control: prioritize, summarize, search and act. Nothing is sent without your approval.</div>
+    <div class="actions" style="margin-top:13px">
+      <a class="btn" href="/">← Back to Assistant</a>
+      <a class="btn" href="/email">New Email</a>
+      <a class="btn" href="/microsoft">Microsoft Outlook</a>
+      <button id="refreshBtn">Refresh Inbox</button>
+    </div>
+  </div>
+
+  <div class="dashboard">
+    <div class="metric"><div class="small">Reviewed</div><div class="num" id="mTotal">—</div></div>
+    <div class="metric"><div class="small">Unread</div><div class="num" id="mUnread">—</div></div>
+    <div class="metric"><div class="small">Urgent</div><div class="num" id="mUrgent">—</div></div>
+    <div class="metric"><div class="small">Action Required</div><div class="num" id="mAction">—</div></div>
+    <div class="metric"><div class="small">FYI</div><div class="num" id="mFYI">—</div></div>
+  </div>
+
+  <div class="commandbar">
+    <div class="actions">
+      <button class="primary" id="briefUnreadBtn">Analyze Unread</button>
+      <button id="briefAllBtn">Analyze Recent</button>
+    </div>
+    <div class="searchrow" style="margin-top:11px">
+      <input id="naturalSearch" placeholder="Example: Find emails from Amjad about HVAC">
+      <button id="searchBtn">Search Inbox</button>
+      <button id="clearSearchBtn">Clear</button>
+    </div>
+    <div id="briefBox" class="briefbox"></div>
+  </div>
+
+  <div class="layout">
+    <div class="card list" id="mailList">
+      <div style="padding:18px" class="small">Loading Outlook inbox…</div>
+    </div>
+
+    <div class="card detail">
+      <div id="emptyState">
+        <h2>Select an email</h2>
+        <p class="small">Choose an email from the inbox to view it and run professional AI analysis.</p>
+      </div>
+
+      <div id="messageView" style="display:none">
+        <div class="small">From</div>
+        <div id="fromLine" style="font-weight:700;margin:3px 0 10px"></div>
+        <h2 id="subjectLine"></h2>
+        <div id="receivedLine" class="small" style="margin-bottom:12px"></div>
+        <div id="bodyBox" class="emailbox"></div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="primary" id="analyzeBtn">Analyze with AI</button>
+<a class="btn" href="/calendar">Create Meeting</a>
+<a class="btn" href="/contacts">Add / View Contact</a>
+<button id="followupBtn">Create Follow-Up</button>
+          <a class="btn" id="openOutlook" target="_blank" style="display:none">Open in Outlook</a>
+        </div>
+
+        <div id="analysisArea" style="display:none">
+          <div class="analysis">
+            <div class="panel">
+              <b>AI Summary</b>
+              <p id="summaryText" style="line-height:1.5"></p>
+            </div>
+            <div class="panel">
+              <b>Priority</b><br><br>
+              <span id="priorityBadge" class="badge medium">Medium</span>
+              <p id="actionRequired" style="font-weight:700"></p>
+              <ul id="actionItems"></ul>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:12px">
+            <b>Suggested Reply</b>
+            <p class="small">Review and edit the reply before approval.</p>
+            <textarea id="replyText"></textarea>
+
+            <div class="checkbox" style="margin-top:11px">
+              <input id="approveReply" type="checkbox">
+              <label for="approveReply">I approve sending this reply now</label>
+            </div>
+
+            <div class="actions" style="margin-top:12px">
+              <button class="primary" id="sendReplyBtn">Send Reply from Outlook</button>
+            </div>
+            <div id="replyStatus" class="status"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const q=id=>document.getElementById(id);
+let selectedMessage=null;
+let replySent=false;
+
+function esc(s){
+  return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function fmtDate(s){
+  if(!s)return '';
+  try{return new Date(s).toLocaleString()}catch(e){return s}
+}
+
+function renderMessages(msgs){
+  q('mailList').innerHTML=msgs.length?msgs.map(m=>`
+    <div class="mail ${m.is_read?'':'unread'}" data-id="${esc(m.id)}">
+      <div class="sender">${esc(m.sender_name||m.sender_email||'Unknown sender')}</div>
+      <div class="subject">${esc(m.subject)}</div>
+      ${m.category?`<span class="cat cat-${esc(m.category).replaceAll(' ','-')}">${esc(m.category)}</span>`:''}
+      <div class="preview">${esc(m.preview)}</div>
+      <div class="meta"><span>${esc(m.importance||'normal')}</span><span>${esc(fmtDate(m.received))}</span></div>
+    </div>`).join(''):'<div style="padding:18px" class="small">No matching emails.</div>';
+  q('mailList').querySelectorAll('.mail').forEach(el=>{el.onclick=()=>selectMessage(el.dataset.id,el);});
+}
+
+async function loadInbox(){
+  q('mailList').innerHTML='<div style="padding:18px" class="small">Loading Outlook inbox…</div>';
+  try{
+    const r=await fetch('/api/inbox/command-center?top=25',{cache:'no-store'});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Inbox load failed');
+    q('mTotal').textContent=d.total;
+    q('mUnread').textContent=d.unread;
+    q('mUrgent').textContent=(d.counts||{})['Urgent']||0;
+    q('mAction').textContent=(d.counts||{})['Action Required']||0;
+    q('mFYI').textContent=(d.counts||{})['FYI']||0;
+    renderMessages(d.messages||[]);
+  }catch(e){
+    q('mailList').innerHTML='<div style="padding:18px;color:#b42318">Error: '+esc(e.message)+'</div>';
+  }
+}
+
+async function selectMessage(id,el){
+  q('mailList').querySelectorAll('.mail').forEach(x=>x.classList.remove('selected'));
+  if(el)el.classList.add('selected');
+  q('emptyState').style.display='none';
+  q('messageView').style.display='block';
+  q('analysisArea').style.display='none';
+  q('bodyBox').textContent='Loading message…';
+  replySent=false;
+
+  try{
+    const r=await fetch('/api/inbox/message/'+encodeURIComponent(id));
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Message load failed');
+    selectedMessage=d.message;
+    q('fromLine').textContent=(selectedMessage.sender_name||selectedMessage.sender_email)+' <'+selectedMessage.sender_email+'>';
+    q('subjectLine').textContent=selectedMessage.subject;
+    q('receivedLine').textContent=fmtDate(selectedMessage.received);
+    q('bodyBox').textContent=selectedMessage.body||selectedMessage.preview||'';
+    if(selectedMessage.web_link){
+      q('openOutlook').href=selectedMessage.web_link;
+      q('openOutlook').style.display='inline-block';
+    }else q('openOutlook').style.display='none';
+  }catch(e){
+    q('bodyBox').textContent='Error: '+e.message;
+  }
+}
+
+q('analyzeBtn').onclick=async()=>{
+  if(!selectedMessage)return;
+  const btn=q('analyzeBtn');btn.disabled=true;btn.textContent='Analyzing…';
+  try{
+    const r=await fetch('/api/inbox/analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message_id:selectedMessage.id})
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Analysis failed');
+
+    q('analysisArea').style.display='block';
+    q('summaryText').textContent=d.summary||'';
+    const pb=q('priorityBadge');
+    pb.textContent=d.priority||'Medium';
+    pb.className='badge '+String(d.priority||'Medium').toLowerCase();
+    q('actionRequired').textContent=d.action_required?'Action required':'No immediate action required';
+    q('actionItems').innerHTML=(d.action_items||[]).map(x=>'<li>'+esc(x)+'</li>').join('')||'<li>No specific action items identified.</li>';
+    q('replyText').value=d.suggested_reply||'';
+    q('approveReply').checked=false;
+    q('replyStatus').className='status';
+    q('replyStatus').textContent='';
+    replySent=false;
+  }catch(e){
+    q('analysisArea').style.display='block';
+    q('summaryText').textContent='Error: '+e.message;
+  }finally{
+    btn.disabled=false;btn.textContent='Analyze with AI';
+  }
+};
+
+q('replyText').addEventListener('input',()=>{replySent=false});
+
+q('sendReplyBtn').onclick=async()=>{
+  const status=q('replyStatus');
+
+  if(replySent){
+    status.className='status warn';
+    status.textContent='This reply was already sent. Edit the reply before sending again.';
+    return;
+  }
+  if(!selectedMessage){
+    status.className='status bad';
+    status.textContent='No email is selected.';
+    return;
+  }
+  if(!q('approveReply').checked){
+    status.className='status bad';
+    status.textContent='Please approve the reply before sending.';
+    return;
+  }
+  const text=q('replyText').value.trim();
+  if(!text){
+    status.className='status bad';
+    status.textContent='Reply text is empty.';
+    return;
+  }
+
+  const target=selectedMessage.sender_email||selectedMessage.sender_name||'the sender';
+  if(!confirm('Send this reply now to '+target+' from your connected Outlook account?'))return;
+
+  const btn=q('sendReplyBtn');btn.disabled=true;
+  status.className='status warn';status.textContent='Sending reply…';
+
+  try{
+    const r=await fetch('/api/inbox/reply',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        approved:true,
+        message_id:selectedMessage.id,
+        reply_text:text
+      })
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Reply failed');
+    replySent=true;
+    q('approveReply').checked=false;
+    status.className='status good';
+    status.textContent='✓ Reply sent successfully from Outlook.';
+  }catch(e){
+    status.className='status bad';
+    status.textContent='Error: '+e.message;
+  }finally{
+    btn.disabled=false;
+  }
+};
+
+
+async function runBrief(onlyUnread){
+  const box=q('briefBox');
+  box.style.display='block';
+  box.innerHTML='<b>AI Executive Brief</b><br><span class="small">Analyzing inbox…</span>';
+  try{
+    const r=await fetch('/api/inbox/daily-brief',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({only_unread:onlyUnread})
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Brief failed');
+    let h='<b>AI Executive Brief</b><p>'+esc(d.brief||'')+'</p>';
+    if((d.items||[]).length){
+      h+='<ul>'+d.items.map(x=>'<li><b>'+esc(x.category||'')+': '+esc(x.subject||'')+'</b> — '+esc(x.reason||'')+(x.action?' <i>Action: '+esc(x.action)+'</i>':'')+'</li>').join('')+'</ul>';
+    }
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<b>AI Executive Brief</b><p style="color:#b42318">Error: '+esc(e.message)+'</p>';}
+}
+q('briefUnreadBtn').onclick=()=>runBrief(true);
+q('briefAllBtn').onclick=()=>runBrief(false);
+
+q('searchBtn').onclick=async()=>{
+  const query=q('naturalSearch').value.trim();
+  if(!query)return;
+  q('mailList').innerHTML='<div style="padding:18px" class="small">Searching inbox…</div>';
+  try{
+    const r=await fetch('/api/inbox/natural-search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query})
+    });
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Search failed');
+    renderMessages(d.results||[]);
+  }catch(e){q('mailList').innerHTML='<div style="padding:18px;color:#b42318">Error: '+esc(e.message)+'</div>';}
+};
+q('clearSearchBtn').onclick=()=>{q('naturalSearch').value='';loadInbox();};
+q('naturalSearch').addEventListener('keydown',e=>{if(e.key==='Enter')q('searchBtn').click();});
+
+
+q('followupBtn').onclick=async()=>{
+  if(!selectedMessage){alert('Select an email first.');return;}
+  const days=prompt('Follow up in how many days?','3');
+  if(days===null)return;
+  const n=Math.max(1,Number(days)||3);
+  const instruction='Follow up on "'+selectedMessage.subject+'" in '+n+' days';
+  const r=await fetch('/api/followups',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      instruction,
+      contact_name:selectedMessage.sender_name||'',
+      contact_email:selectedMessage.sender_email||'',
+      message_id:selectedMessage.id||'',
+      source_subject:selectedMessage.subject||'',
+      notes:selectedMessage.preview||''
+    })
+  });
+  const d=await r.json();
+  if(d.ok)alert('Follow-up created for '+new Date(d.item.due).toLocaleString());
+  else alert('Error: '+(d.error||'Could not create follow-up'));
+};
+
+q('refreshBtn').onclick=loadInbox;
+loadInbox();
+</script>
+</body>
+</html>

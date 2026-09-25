@@ -1,0 +1,798 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adam Real Meeting Attendance — {{ version }}</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f7fb;color:#0b1b35;margin:0}.wrap{max-width:1050px;margin:30px auto;padding:0 18px}.card{background:#fff;border:1px solid #d9e2ef;border-radius:16px;padding:22px;margin-bottom:16px;box-shadow:0 3px 14px rgba(10,30,60,.05)}h1{margin-top:0}.note{background:#fff6d9;border:1px solid #e3bd57;padding:14px;border-radius:10px;margin:12px 0}.ok{background:#e9f8ee;border:1px solid #91cfa5;padding:12px;border-radius:10px}label{font-weight:700;display:block;margin-top:12px}select,textarea,input[type="text"],input[type="datetime-local"]{width:100%;box-sizing:border-box;padding:10px;margin-top:6px;border:1px solid #b8c5d6;border-radius:8px}textarea{min-height:180px}button{background:#111c33;color:#fff;border:0;border-radius:8px;padding:11px 15px;margin:8px 8px 0 0;cursor:pointer}button.secondary{background:#5b6473}button.stop{background:#7a2430}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.check{display:flex;gap:8px;align-items:center;margin-top:14px}.check input{width:auto}pre{background:#111827;color:#d9e7ff;padding:15px;border-radius:10px;white-space:pre-wrap;overflow:auto}@media(max-width:720px){.row{grid-template-columns:1fr}}</style></head>
+<body><div class="wrap"><div class="card"><h1>Adam — Real Meeting Attendance <small>{{ version }}</small></h1>
+<div class="ok"><b>Companion mode ready:</b> Adam can listen through this browser/device microphone (when supported and permitted), use automatic multilingual server transcription with code-switching, smart end-of-turn timing, silence/prompt-leak protection, technical-term preservation, retained paired discussion threads, professional meeting-report generation, balanced/proactive representative intervention, a live decision/action register, direct-question coverage assurance with one automatic retry, human wake-name / question-preamble turn awareness, hard active-project isolation, Intelligent Meeting Focus for shared rooms, selective side-conversation filtering before formal meeting memory, a separate Universal AI Assistant for any topic/order with one-task focus, natural correction/comment/order replies inside the active meeting, no-silent-turn response watchdog for noisy rooms, simple automatic meeting voice playback using the same proven TTS path as the Universal Assistant, durable owner continuity memory across upgrades for explicit corrections/remember instructions, native DOCX export, and meeting action-item extraction.</div>
+<div class="note"><b>Important:</b> This version does not falsely claim autonomous Teams/Zoom/Google Meet joining. Join remains unavailable until a real approved platform adapter is configured. You remain in control of microphone permission and meeting consent.</div>
+<div class="row"><div><label>Meeting title</label><input id="meetingTitle" type="text" placeholder="Example: MEP Coordination Meeting"></div><div><label>Project / reference</label><input id="projectReference" type="text" placeholder="Example: Project P20 — Weekly Coordination"></div></div><div class="row"><div><label>Participants</label><input id="meetingParticipants" type="text" placeholder="Names / companies if known"></div><div><label>Meeting date / time</label><input id="meetingDateTime" type="datetime-local"></div></div>
+<div class="row"><div><label>Meeting platform</label><select id="platform"><option value="microsoft_teams">Microsoft Teams</option><option value="zoom">Zoom</option><option value="google_meet">Google Meet</option><option value="in_person">In-person meeting</option><option value="other">Other</option></select></div><div><label>Attendance mode</label><select id="mode"><option value="listen_only">Listen Only</option><option value="take_notes" selected>Take Notes</option><option value="active_participant">Active Participant</option><option value="owner_representative">Owner Representative — Rehearsal</option></select></div></div><div class="row"><div><label>Meeting language / understanding</label><select id="meetingLanguage"><option value="auto-multilingual" selected>Auto — All languages</option><option value="ar-LB">Arabic — Lebanese</option><option value="en-US">English</option><option value="auto-bilingual">Legacy — Lebanese Arabic + English</option></select></div><div><label>Auto-answer trigger</label><select id="answerTrigger"><option value="adam_or_question">Professional conversation — questions / corrections / orders</option><option value="adam">Only when participant says Adam / آدم</option><option value="every_final">Every final sentence (rehearsal only)</option></select></div></div>
+<div class="check"><input id="approved" type="checkbox"><label id="approvedLabel" for="approved" style="margin:0">Owner Approval — allow Adam to listen/capture this meeting</label></div>
+<div class="check"><input id="meetingContinuityMemory" type="checkbox" checked><label for="meetingContinuityMemory" style="margin:0">Persistent owner memory — keep my explicit corrections / “remember this” instructions across Adam upgrades (local only)</label></div>
+<label>Live transcript / manual notes</label><textarea id="transcript" placeholder="Live transcript will appear here. You can also paste meeting transcript or notes manually."></textarea>
+<div class="note" id="typedMeetingQueryPanel" style="margin-top:10px"><b>Typed meeting query / comment / order</b><p style="margin:6px 0"><small>Use this box when you want Adam to answer typed meeting input. It uses the same Meeting Focus, project isolation, meeting memory, question coverage, and owner-approval rules as microphone speech. Press Enter or click Send Typed Query.</small></p><div style="display:flex;gap:8px;align-items:center"><input id="meetingTextQuery" type="text" style="flex:1" placeholder="Example: The contractor wants to increase the chilled-water pipe from 100 mm to 125 mm. What do you think?"><button id="sendMeetingTextQuery" type="button">Send Typed Query</button></div><p id="meetingTextQueryStatus" style="margin:6px 0 0">Typed meeting input: ready</p></div>
+<button id="start">Start Listening</button><button id="stop" class="stop">Stop Listening</button><button id="analyze" class="secondary">Analyze Meeting Notes</button><button id="clear" class="secondary">Clear Screen</button><button id="endMeeting" class="stop">End Meeting / New Session</button>
+<p id="micStatus">Microphone: idle</p><p id="autoStatus"><b>Representative auto-response:</b> not armed</p><p id="meetingReplyTrace"><b>Meeting reply trace:</b> ready</p><p id="meetingLatencyStatus"><b>Meeting response latency:</b> ready</p><pre id="out">Ready.</pre>
+<div id="universalAssistantPanel" class="ok" style="margin-top:16px"><b>Adam — Universal AI Assistant</b><p><b>Normal assistant mode:</b> ask Adam anything by text or voice. Universal Assistant is independent of Meeting Focus Lock, project isolation, and meeting-question filters. It keeps one active task/thread at a time so an old subject is not mixed into a new one. External actions still use Adam's normal owner-approval boundaries.</p><div class="row"><div><label>Current task / subject focus</label><input id="universalTaskFocus" type="text" placeholder="Example: Prepare RFI reply / Review HVAC issue / General questions"></div><div><label>Assistant response</label><select id="universalResponseLanguage"><option value="auto" selected>Auto — match my request</option><option value="English">English</option><option value="Arabic">Arabic</option></select></div></div><label>Ask Adam anything / give an order</label><textarea id="universalInput" style="min-height:85px" placeholder="Example: Explain this technical issue, draft a letter, check my saved contact, prepare an email, or ask any general question."></textarea><button id="universalAsk">Ask Adam</button><button id="universalVoice" class="secondary">🎙 Voice Query</button><button id="universalNewTask" class="secondary">Start New Task</button><div class="check"><input id="universalContinuityMemory" type="checkbox" checked><label for="universalContinuityMemory" style="margin:0">Use persistent owner memory across Adam upgrades (explicit corrections / “remember this” only)</label></div><div class="check"><input id="universalSpeak" type="checkbox" checked><label for="universalSpeak" style="margin:0">Speak Adam's answer automatically</label></div><p id="universalStatus">Universal Assistant: ready — no meeting approval required for normal Q&amp;A</p><label>Adam answer</label><textarea id="universalReply" readonly style="min-height:120px" placeholder="Adam's latest answer appears here."></textarea><label>Current task conversation — retained until Start New Task</label><textarea id="universalHistory" readonly style="min-height:150px" placeholder="Only the current task thread is kept here. Start New Task clears it so subjects do not mix."></textarea><label>Prepared action / review status</label><textarea id="universalAction" readonly style="min-height:90px" placeholder="If your request prepares an email, calendar item, WhatsApp, workflow, contact update, follow-up, or another action, Adam shows the prepared/review state here. Consequential external actions remain subject to normal owner approval."></textarea><p><a href="/">Open Main Adam Assistant for full action-review controls</a></p></div>
+<div id="participantPanel" class="note" style="display:none"><b>Active Participant — governed response</b><p>In Active Participant mode Adam prepares a response first and speaking uses the session approval below. In Owner Representative mode, one explicit representative approval arms automatic answers to participants who address “Adam” / “آدم”; consequential actions still require their own separate owner approval. Adam identifies himself as AI.</p><label>Latest Adam response / owner edit</label><textarea id="responseDraft" style="min-height:90px" placeholder="Adam's latest reply appears here and remains visible until another reply or End Meeting / New Session."></textarea><label>Adam reply history — retained for this meeting</label><textarea id="responseHistory" readonly style="min-height:150px" placeholder="Adam's spoken replies and clarification questions will remain here for the full meeting session. Clear Screen does not remove them."></textarea><label>Participant questions / requests / corrections — retained for this meeting</label><textarea id="questionHistory" readonly style="min-height:105px" placeholder="Meaningful questions and requests Adam handled will remain here. Background noise, likely side-room conversations, and greetings are not added when Meeting Focus Lock is enabled."></textarea><label>Meeting Discussion Record — paired participant + Adam / topic / status</label><textarea id="discussionRecord" readonly style="min-height:210px" placeholder="Each meaningful participant question is paired with Adam's answer, topic, and status. Short follow-ups stay attached to the immediately preceding discussion thread."></textarea><label>Live Meeting Register — actions / risks / approvals</label><textarea id="meetingRegister" readonly style="min-height:150px" placeholder="Adam will classify open actions, information requests, risks, and items that still require owner approval. This register never creates an approval by itself."></textarea><label>Question Coverage Monitor — every direct question accounted for</label><textarea id="questionCoverage" readonly style="min-height:150px" placeholder="Every substantive direct participant question will appear here as Answered, Answered — information unavailable, Clarification requested, or Unanswered. Saying only “Adam” or a question preamble does not create a coverage item. Adam retries one temporary AI failure automatically instead of silently dropping the question."></textarea><div class="ok" style="margin-top:12px"><b>Professional Meeting Report</b><p>Generate the report from the retained paired discussion record and live register, including context that remains after Clear Screen. The report distinguishes decisions, recommendations, open items, information required, and items needing owner approval.</p><button id="generateReport">Generate Meeting Report</button><button id="downloadReport" class="secondary">Download Word (.docx)</button><button id="printReport" class="secondary">Print / Save PDF</button><textarea id="meetingReport" readonly style="min-height:260px" placeholder="Generated meeting report will appear here."></textarea></div><button id="prepareResponse" class="secondary">Prepare Response</button><div class="check" id="manualSpeakApprovalRow"><input id="speakApproved" type="checkbox"><label for="speakApproved" style="margin:0">Owner Approval — allow Adam to speak this response</label></div><button id="authorizeSpeak">Authorize & Speak</button><p id="speakStatus">Speaking: not authorized</p>
+<div id="representativePanel" class="ok" style="display:none;margin-top:14px"><b>Owner Representative — professional rehearsal mode</b><p>Adam may represent Mohamad in professional discussion across disciplines, answer questions, explain, ask for clarification, and state only supported facts or positions written in the briefing below. Adam understands multilingual/code-switched speech. His default reply is English; a participant may explicitly ask him to switch to Arabic or another language. Adam must disclose that he is an AI representative and cannot approve costs, variations, contractual changes, purchases, payments, committed dates, or other consequential commitments without separate owner approval.</p><p><b>Natural meeting dialogue:</b> ON — Adam answers like an experienced professional colleague: conclusion first, concise by default, conversational follow-ups, calm disagreement, minimal robotic preambles, and practical clarification only when needed.</p><div class="note" id="meetingFocusPanel"><b>Human Meeting Presence — Intelligent Meeting Focus</b><div class="check"><input id="meetingFocusLock" type="checkbox" checked><label for="meetingFocusLock" style="margin:0">Meeting Focus Lock — concentrate on this meeting and reject likely side-room / other-project speech before formal transcript, memory, Q&amp;A, and report</label></div><div class="row"><div><label>Room focus sensitivity</label><select id="focusSensitivity"><option value="strict" selected>Strict — shared room / nearby conversations</option><option value="balanced">Balanced — normal meeting room</option><option value="open">Open — capture all detected speech</option></select></div><div><label>Meeting focus / agenda keywords</label><input id="meetingFocusAgenda" type="text" placeholder="Example: MEP coordination, Tower, HVAC, chilled water, ductwork, variations"></div></div><p><small>Focus Lock combines meeting title/project, declared participants/companies, current discussion context, topic relevance, and a weak near-field audio hint. In Strict mode, an explicitly named different project is a hard reject unless the speaker clearly frames it as a comparison/reference to the active project. Where the browser supports it, microphone voice isolation is requested and automatic gain is disabled so distant voices are less likely to dominate. This version does not claim biometric speaker identification or perfect physical source separation. Audio may still be processed transiently for speech transcription; filtered side conversations are not added to Adam's formal meeting transcript or retained meeting memory.</small></p><label>Selective Listening Monitor</label><textarea id="focusMonitor" readonly style="min-height:120px" placeholder="Adam will show accepted meeting speech vs filtered side-room speech here without retaining the rejected conversation text."></textarea></div><label>Representative participation style</label><select id="participationStyle"><option value="conservative">Conservative — direct questions only</option><option value="balanced" selected>Balanced — questions + material approval/commitment risks</option><option value="proactive">Proactive — also flag material technical/commercial risks and owner actions</option></select><p style="margin-top:6px"><small>Balanced is recommended. Adam should not interrupt routine discussion; proactive intervention is limited to material risks, commitments, contradictions, or owner actions.</small></p><label>Professional discipline</label><select id="professionalScope"><option value="auto" selected>Auto-detect — cross-disciplinary professional</option><option value="engineering_mep">Engineering / MEP / Construction</option><option value="project_management">Project Management</option><option value="commercial_contracts">Commercial / Contracts</option><option value="procurement">Procurement</option><option value="finance">Finance / Cost</option><option value="it_software">IT / Software</option><option value="sales_business">Sales / Business</option><option value="other">Other professional discipline</option></select><label>Owner briefing / positions Adam may rely on</label><textarea id="ownerBriefing" style="min-height:120px" placeholder="Example: Mechanical shop drawings are targeted for Tuesday. Do not accept any variation or cost. Ask the contractor to submit supporting documents for owner review."></textarea><label>Authority profile</label><textarea id="authorityProfile" style="min-height:90px">Answer technical and factual questions; ask for clarification; take notes; record requests for Mohamad. Do not approve variations, costs, contractual changes, purchases, payments, commitments, or date changes without separate owner approval.</textarea><div class="check" id="representativeApprovalRow" style="display:none"><input id="representativeApproved" type="checkbox"><label for="representativeApproved" style="margin:0">Owner representative session approval (synchronized with the main approval above)</label></div><p><b>Test operation:</b> use a second device/person as the meeting participant. Ask questions aloud or type them below. Adam should answer, speak, take notes, and refuse consequential commitments.</p></div><hr><b>Interactive Meeting Conversation</b><p>Approve once for this meeting session. Adam can then answer questions addressed to “Adam” and continue follow-up discussion. External actions and commitments still require their normal separate approvals. Do not promise, send, approve, purchase, trade, schedule, or execute external actions without the normal separate owner approval.</p>
+<div class="check"><input id="conversationApproved" type="checkbox"><label for="conversationApproved" style="margin:0">Owner Approval — allow Adam to converse during this meeting session (required for Active Participant; Owner Representative uses the representative approval above)</label></div>
+<label>Question / discussion point for Adam</label><textarea id="conversationInput" style="min-height:70px" placeholder="Example: Adam, explain why the chilled-water pipe size may need to increase."></textarea>
+<button id="askAdam">Ask Adam & Speak</button><div class="check"><input id="autoRespond" type="checkbox"><label for="autoRespond" style="margin:0">Auto-respond when a final microphone sentence addresses “Adam” (automatic in Owner Representative mode)</label></div><div class="check"><input id="meetingAutoSpeak" type="checkbox" checked><label for="meetingAutoSpeak" style="margin:0">Speak Adam's meeting answers automatically — applies to microphone and typed meeting queries</label></div><div class="check"><input id="meetingFastResponse" type="checkbox" checked><label for="meetingFastResponse" style="margin:0">Fast meeting response — shorter silence boundary for short questions; longer turns keep the full natural-pause protection</label></div><div class="check"><input id="meetingFastVoice" type="checkbox" checked><label for="meetingFastVoice" style="margin:0">Fast meeting voice — stream long answers in short speech chunks with automatic browser fallback</label></div><div class="check"><input id="meetingInstantFactualVoice" type="checkbox" checked><label for="meetingInstantFactualVoice" style="margin:0">Instant factual voice — for short factual fast-path replies, start the device voice immediately instead of waiting for server TTS; governed/change/approval replies keep the professional server voice path</label></div><div class="check"><input id="meetingSpeakerProtection" type="checkbox" checked><label for="meetingSpeakerProtection" style="margin:0">Laptop speaker protection — ignore Adam's own speaker audio while he talks so the microphone does not cancel his reply (recommended)</label></div><button id="testMeetingVoice" type="button" class="secondary">Test / Enable Meeting Voice</button><p id="meetingVoiceStatus">Meeting voice: ready — click Start Listening or Test / Enable Meeting Voice once to unlock browser audio</p>
+<p id="conversationStatus">Conversation: waiting for session approval</p></div></div>
+<div class="card"><a href="/">Back to Adam</a> &nbsp; <a href="/meeting-platform">Meeting Platform Adapter</a></div></div>
+<script>
+let recognition=null; let listening=false;
+const UNIVERSAL_HISTORY_KEY='adamUniversalCurrentTaskHistoryV1',UNIVERSAL_FOCUS_KEY='adamUniversalCurrentTaskFocusV1';
+let universalAssistantHistory=[];let universalRecognition=null;
+try{const saved=JSON.parse(localStorage.getItem(UNIVERSAL_HISTORY_KEY)||'[]');if(Array.isArray(saved))universalAssistantHistory=saved.slice(-40);}catch(_){universalAssistantHistory=[];}
+function saveUniversalTaskState(){try{localStorage.setItem(UNIVERSAL_HISTORY_KEY,JSON.stringify(universalAssistantHistory.slice(-40)));const f=document.getElementById('universalTaskFocus');if(f)localStorage.setItem(UNIVERSAL_FOCUS_KEY,String(f.value||''));}catch(_){}}
+function renderUniversalHistory(){const box=document.getElementById('universalHistory');if(!box)return;box.value=universalAssistantHistory.map((x,i)=>((x.role==='user'?'Owner':'Adam')+': '+x.content)).join('\n\n');box.scrollTop=box.scrollHeight;}
+function universalActionText(a){if(!a)return 'No prepared action for this request.';try{return JSON.stringify(a,null,2);}catch(_){return String(a);}}
+async function speakUniversalAnswer(text){if(!document.getElementById('universalSpeak').checked||!text)return;try{const lang=/[\u0600-\u06ff]/.test(text)?'ar-LB':'auto';const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,language:lang})});if(!r.ok)throw new Error('tts');const blob=await r.blob(),url=URL.createObjectURL(blob),audio=new Audio(url);audio.onended=()=>URL.revokeObjectURL(url);await audio.play();}catch(_){if('speechSynthesis' in window){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);speechSynthesis.speak(u);}}}
+async function runUniversalAssistant(){const input=document.getElementById('universalInput'),status=document.getElementById('universalStatus'),reply=document.getElementById('universalReply'),action=document.getElementById('universalAction');const text=String(input.value||'').trim();if(!text){status.textContent='Universal Assistant: type or say a request';return;}status.textContent='Universal Assistant: Adam is thinking…';input.value='';const focus=String(document.getElementById('universalTaskFocus').value||'').trim();try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,messages:universalAssistantHistory.slice(-16),response_language:document.getElementById('universalResponseLanguage').value||'auto',task_focus:focus,isolate_task:true,continuity_memory:document.getElementById('universalContinuityMemory').checked})});const raw=await r.text();let j;try{j=JSON.parse(raw);}catch(_){throw new Error('Server returned HTTP '+r.status+' instead of JSON');}if(!r.ok||!j.ok)throw new Error(j.error||'Request failed');const answer=String(j.reply||'').trim()||'I received the request but no answer was produced.';reply.value=answer;action.value=universalActionText(j.action);universalAssistantHistory.push({role:'user',content:text},{role:'assistant',content:answer});if(universalAssistantHistory.length>40)universalAssistantHistory=universalAssistantHistory.slice(-40);saveUniversalTaskState();renderUniversalHistory();status.textContent=j.continuity_memory_saved?'Universal Assistant: answered — explicit correction remembered across upgrades':(j.action?'Universal Assistant: answered — action prepared/review state shown below':'Universal Assistant: answered — ready for follow-up');await speakUniversalAnswer(answer);}catch(e){reply.value='Error: '+String(e&&e.message||e);status.textContent='Universal Assistant: request failed — retry';}}
+let meetingMicStream=null; let meetingRecorder=null; let meetingChunkTimer=null; let meetingTranscriptionQueue=Promise.resolve();
+// v8.3.1.8 — natural professional meeting dialogue + adaptive human-like responses.
+// The server recorder now tells the response engine when a participant turn actually ended,
+// so Adam does not get stuck waiting on the next recorder's VAD state.
+// Adam waits for sustained silence, keeps the meeting memory when the visible screen is cleared,
+// and continues listening while he is speaking so participant interruptions are captured safely.
+let meetingAudioContext=null; let meetingAnalyser=null; let meetingLevelTimer=null;
+let meetingChunkSpeechFrames=0; let meetingNoiseFloor=0.003; let meetingPeakRms=0; let meetingVadAvailable=false;
+let meetingUtteranceSpeechStarted=false;let meetingUtteranceFirstSpeechAt=0;let meetingUtteranceLastSpeechAt=0;let meetingRecorderStartedAt=0;let meetingLastParticipantSpeechAt=0;
+let meetingTranscriptionsPending=0;let meetingMemorySyncQueue=Promise.resolve();
+let meetingQuestionQueue=[];let meetingAdamSpeaking=false;let meetingAdamAudio=null;let meetingAdamAudioUrl="";let meetingAdamSpeechResolve=null;let meetingLastSpokenText="";let meetingLastSpokenAt=0;let meetingAdamAudioContextSource=null;
+let meetingVoiceUnlocked=false;let meetingVoiceUnlockContext=null;let meetingVoiceJobSeq=0;let meetingSpeakerOutputActive=false;let meetingRecorderContainsAdamAudio=false;let meetingLastVoiceDeliveryOk=false;
+let meetingRecorderStopReason='';let meetingLastTranscriptText='';let meetingLastTranscriptAt=0;
+const MEETING_END_OF_TURN_SILENCE_MS=4200;const MEETING_FAST_END_OF_TURN_SILENCE_MS=2400;const MEETING_FAST_TURN_MAX_SPEECH_MS=12000;const MEETING_RESPONSE_STABILITY_MS=650;const MEETING_FINAL_TURN_MERGE_GRACE_MS=1500;const MEETING_FINAL_TURN_FAST_COMPLETE_GRACE_MS=350;const MEETING_FINAL_TURN_MAX_WAIT_MS=10000;const MEETING_CONTINUATION_SPEECH_HOLD_MS=900;const MEETING_MAX_AUTOREPLY_WAIT_MS=6000;const MEETING_SILENT_CHUNK_MS=8000;const MEETING_MAX_UTTERANCE_MS=60000;const MEETING_CLARIFICATION_WINDOW_MS=45000;const MEETING_FAST_VOICE_CHUNK_CHARS=140;
+const transcript=document.getElementById('transcript'); const micStatus=document.getElementById('micStatus'); const modeEl=document.getElementById('mode'); const participantPanel=document.getElementById('participantPanel');
+const meetingDateTimeEl=document.getElementById('meetingDateTime');if(meetingDateTimeEl&&!meetingDateTimeEl.value){const d=new Date();const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);meetingDateTimeEl.value=local.toISOString().slice(0,16);}
+let meetingAutoResponseBusy=false;let meetingAutoInFlightKey='';let meetingLastAutoQuestion='';let meetingLastAutoAt=0;let meetingPendingAutoParts=[];let meetingPendingAutoQuestionId='';let meetingPendingAutoTimer=null;let meetingPendingAutoStartedAt=0;let meetingLastAcceptedTranscriptAt=0;let meetingLastFocusCandidateText='';let meetingLastFocusCandidateAt=0;
+let meetingResponseHistory=[];let meetingQuestionHistory=[];let meetingAwaitingClarification=false;let meetingClarificationPrompt='';let meetingClarificationAt=0;let meetingClarificationQuestionId='';
+let meetingFocusAcceptedCount=0;let meetingFocusRejectedCount=0;let meetingFocusEvents=[];
+let meetingAddressHoldUntil=0;const MEETING_ADDRESS_HOLD_MS=12000;
+function rememberAdamVisibleReply(text,clarificationRequested=false){
+ const t=String(text||'').trim();if(!t)return;
+ meetingResponseHistory.push({text:t,clarification:!!clarificationRequested});
+ if(meetingResponseHistory.length>60)meetingResponseHistory=meetingResponseHistory.slice(-60);
+ const box=document.getElementById('responseHistory');if(box){
+  box.value=meetingResponseHistory.map((x,i)=>(i+1)+'. '+(x.clarification?'[Clarification] ':'')+x.text).join('\n\n');
+  box.scrollTop=box.scrollHeight;
+ }
+}
+function normalizeAutoQuestion(q){return String(q||'').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu,' ').trim();}
+function rememberParticipantQuestion(text){
+ const t=String(text||'').trim();if(!t)return;const k=normalizeAutoQuestion(t);
+ if(meetingQuestionHistory.some(x=>normalizeAutoQuestion(x)===k))return;
+ meetingQuestionHistory.push(t);if(meetingQuestionHistory.length>80)meetingQuestionHistory=meetingQuestionHistory.slice(-80);
+ const box=document.getElementById('questionHistory');if(box){box.value=meetingQuestionHistory.map((x,i)=>(i+1)+'. '+x).join('\n\n');box.scrollTop=box.scrollHeight;}
+}
+let meetingDiscussionHistory=[];
+function rememberDiscussionRecord(question,answer,topic,status,followup,registerType,registerState,ownerApprovalRequired,actionCandidate,riskFlag,actionOrigin,questionId=''){
+ const q=String(question||'').trim(),a=String(answer||'').trim();if(!q||!a)return;
+ const payload={questionId:String(questionId||''),question:q,answer:a,topic:String(topic||'General Meeting Discussion'),status:String(status||'Explained'),followup:!!followup,registerType:String(registerType||'Discussion'),registerState:String(registerState||'Recorded'),ownerApprovalRequired:!!ownerApprovalRequired,actionCandidate:!!actionCandidate,riskFlag:!!riskFlag,actionOrigin:String(actionOrigin||'None')};
+ const existing=payload.questionId?meetingDiscussionHistory.find(x=>String(x.questionId||'')===payload.questionId):null;
+ if(existing)Object.assign(existing,payload);else meetingDiscussionHistory.push(payload);
+ if(meetingDiscussionHistory.length>100)meetingDiscussionHistory=meetingDiscussionHistory.slice(-100);
+ const box=document.getElementById('discussionRecord');if(box){box.value=meetingDiscussionHistory.map((x,i)=>(i+1)+'. ['+x.topic+'] ['+x.status+']'+(x.followup?' [Follow-up thread]':'')+'\nParticipant: '+x.question+'\nAdam: '+x.answer).join('\n\n');box.scrollTop=box.scrollHeight;}
+ const reg=document.getElementById('meetingRegister');if(reg){const items=meetingDiscussionHistory.filter(x=>x.registerType!=='Discussion'||x.ownerApprovalRequired||x.actionCandidate||x.riskFlag);reg.value=items.map((x,i)=>(i+1)+'. ['+x.registerType+'] ['+x.registerState+'] ['+x.topic+']'+(x.ownerApprovalRequired?' [OWNER APPROVAL REQUIRED]':'')+(x.actionOrigin&&x.actionOrigin!=='None'?' ['+x.actionOrigin+']':'')+'\nParticipant: '+x.question+'\nAdam: '+x.answer).join('\n\n');reg.scrollTop=reg.scrollHeight;}
+}
+function escapeReportHtml(v){return String(v||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));}
+function renderQuestionCoverage(items){
+ const box=document.getElementById('questionCoverage');if(!box)return;const rows=Array.isArray(items)?items.filter(x=>x&&x.direct_question):[];
+ box.value=rows.map((x,i)=>(i+1)+'. ['+String(x.state||'Pending')+']'+(x.topic?' ['+x.topic+']':'')+'\nParticipant: '+String(x.question||'')+(x.answer?'\nAdam: '+String(x.answer):'')).join('\n\n');box.scrollTop=box.scrollHeight;
+}
+function newMeetingQuestionId(){try{return crypto.randomUUID();}catch(_){return String(Date.now())+'-'+Math.random().toString(16).slice(2);}}
+let meetingReplyTraceSteps=[];let meetingReplyTraceQuestionId='';
+function resetMeetingReplyTrace(){meetingReplyTraceSteps=[];meetingReplyTraceQuestionId='';const el=document.getElementById('meetingReplyTrace');if(el)el.innerHTML='<b>Meeting reply trace:</b> ready';}
+function setMeetingReplyTrace(step,label,questionId=''){
+ const qid=String(questionId||'');if(step===1&&(qid!==meetingReplyTraceQuestionId||!meetingReplyTraceSteps.length)){meetingReplyTraceSteps=[];meetingReplyTraceQuestionId=qid;}
+ const idx=meetingReplyTraceSteps.findIndex(x=>x.step===Number(step));const item={step:Number(step),label:String(label||'')};if(idx>=0)meetingReplyTraceSteps[idx]=item;else meetingReplyTraceSteps.push(item);meetingReplyTraceSteps.sort((a,b)=>a.step-b.step);
+ const el=document.getElementById('meetingReplyTrace');if(el)el.innerHTML='<b>Meeting reply trace:</b> '+meetingReplyTraceSteps.map(x=>x.step+' '+x.label).join(' → ');
+}
+let meetingLatencyTrace={speechEndAt:0,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false,endTurnMode:''};
+function resetMeetingLatencyTrace(){meetingLatencyTrace={speechEndAt:0,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false,endTurnMode:''};const el=document.getElementById('meetingLatencyStatus');if(el)el.innerHTML='<b>Meeting response latency:</b> ready';}
+function renderMeetingLatencyTrace(){
+ const t=meetingLatencyTrace,el=document.getElementById('meetingLatencyStatus');if(!el)return;
+ const sec=ms=>(Math.max(0,Number(ms)||0)/1000).toFixed(1)+'s';
+ const total=(t.voiceStartAt&&t.speechEndAt)?t.voiceStartAt-t.speechEndAt:0;
+ const endTurn=(t.sttStartAt&&t.speechEndAt)?t.sttStartAt-t.speechEndAt:0;
+ const stt=(t.sttEndAt&&t.sttStartAt)?t.sttEndAt-t.sttStartAt:0;
+ const focusMerge=(t.aiStartAt&&t.sttEndAt)?t.aiStartAt-t.sttEndAt:0;
+ const ai=(t.aiEndAt&&t.aiStartAt)?t.aiEndAt-t.aiStartAt:0;
+ const voicePrep=(t.voiceStartAt&&t.aiEndAt)?t.voiceStartAt-t.aiEndAt:0;
+ const parts=[];if(total)parts.push('total to voice start '+sec(total));if(endTurn)parts.push('end-turn '+sec(endTurn));if(stt)parts.push('STT '+sec(stt));if(focusMerge)parts.push('focus/merge '+sec(focusMerge));if(ai)parts.push('AI '+sec(ai));if(voicePrep)parts.push('voice prep '+sec(voicePrep));if(t.providerMs)parts.push('provider '+sec(t.providerMs));if(t.endTurnMode)parts.push('turn '+t.endTurnMode);if(t.fastPath)parts.push('fast factual path');
+ el.innerHTML='<b>Meeting response latency:</b> '+(parts.length?parts.join(' | '):'measuring…');
+}
+function meetingTextLooksCompleteForFastReply(text){
+ const t=String(text||'').trim();if(!t||!likelyDirectQuestion(t))return false;if(/[?؟]\s*$/.test(t))return true;
+ const n=normalizeAutoQuestion(t);if(n.split(' ').filter(Boolean).length<4)return false;
+ return /^(?:adam\s+)?(?:what|why|how|when|where|who|which|can|could|should|would|is|are|do|does|did|will|may|explain|tell)\b/i.test(n);
+}
+function sleepMeeting(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+function looksLikeLowInformationNoise(q){
+ const raw=String(q||'').trim();if(!raw)return true;const n=normalizeAutoQuestion(raw);if(!n)return true;
+ if(/^(hi|hello|hey|sorry|thanks|thank you|good morning|good afternoon|good evening|مرحبا|مرحباً|اهلا|أهلا|آسف|اسف|شكرا|شكراً)[.!؟?]*$/i.test(raw))return true;
+ const words=n.split(' ').filter(Boolean);if(words.length>=2&&new Set(words).size===1&&words.length<=5)return true;
+ if(words.length===1&&words[0].length<4&&!/^[\u0600-\u06ff]{3,}$/.test(words[0]))return true;
+ return false;
+}
+function meetingFocusLocked(){const el=document.getElementById('meetingFocusLock');return !!(el&&el.checked&&modeEl.value==='owner_representative');}
+function renderMeetingFocus(j){
+ const box=document.getElementById('focusMonitor');if(!box||!j)return;
+ meetingFocusAcceptedCount=Number(j.accepted_count||meetingFocusAcceptedCount||0);meetingFocusRejectedCount=Number(j.rejected_count||meetingFocusRejectedCount||0);
+ const evt={decision:String(j.decision||''),score:Number(j.score||0),threshold:Number(j.threshold||0),reason:String(j.reason||'')};meetingFocusEvents.push(evt);if(meetingFocusEvents.length>20)meetingFocusEvents=meetingFocusEvents.slice(-20);
+ const last=meetingFocusEvents.slice(-8).map((x,i)=>((meetingFocusEvents.length-Math.min(8,meetingFocusEvents.length)+i+1)+'. '+(x.decision==='accept'?'Accepted meeting speech':'Filtered side-room speech — not added to meeting record')+' | score '+x.score.toFixed(2)+' / '+x.threshold.toFixed(2)+' | '+x.reason));
+ box.value='Meeting Focus Lock: '+(meetingFocusLocked()?'ON':'OFF')+'\nAccepted into meeting: '+meetingFocusAcceptedCount+'\nFiltered before formal memory: '+meetingFocusRejectedCount+'\n\n'+last.join('\n\n');box.scrollTop=box.scrollHeight;
+}
+async function checkMeetingFocus(q,options={}){
+ const focusSessionId=String(options.sessionId||meetingConversationSessionId);const focusSessionEpoch=Number(options.sessionEpoch||meetingSessionEpoch);
+ if(focusSessionId!==meetingConversationSessionId||focusSessionEpoch!==meetingSessionEpoch)return {accept:false,decision:'reject',reason:'stale prior-meeting callback rejected',stale_session:true};
+ if(modeEl.value!=='owner_representative')return {accept:true,decision:'accept',reason:'focus gate not required outside representative mode'};
+ const lockEl=document.getElementById('meetingFocusLock');const focusLocked=!!(lockEl&&lockEl.checked);
+ if(!focusLocked)return {accept:true,decision:'accept',reason:'meeting focus lock is open'};
+ try{
+  const r=await fetch('/api/personal-assistant/meeting-conversation/focus-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:focusSessionId,question_id:String(options.questionId||options.utterance_id||''),utterance_id:String(options.questionId||options.utterance_id||''),text:String(q||''),owner_approved:approved(),focus_locked:focusLocked,focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',peak_rms:Number(options.peak_rms||0),noise_floor:Number(options.noise_floor||0),vad_available:!!options.vad_available})});
+  const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok){if(explicitOtherProjectReferenceLocal(q))return {accept:false,decision:'reject',reason:'local hard project boundary — explicit other project'};const explicit=(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||meetingAwaitingClarification;return {accept:!!explicit,decision:explicit?'accept':'reject',reason:explicit?'focus service unavailable — explicit substantive Adam/follow-up retained':'focus service unavailable — strict shared-room protection filtered unverified speech'}}renderMeetingFocus(j);return j;
+ }catch(_){if(explicitOtherProjectReferenceLocal(q))return {accept:false,decision:'reject',reason:'local hard project boundary — explicit other project'};const explicit=(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||meetingAwaitingClarification;return {accept:!!explicit,decision:explicit?'accept':'reject',reason:explicit?'focus service unavailable — explicit substantive Adam/follow-up retained':'focus service unavailable — strict shared-room protection filtered unverified speech'};}
+}
+function stripMeetingWakePrefix(q){return String(q||'').trim().replace(/^(?:adam|آدم|ادم|ادام)\b[\s,.:;!?؟-]*/i,'').trim();}
+function isWakeOnly(q){const raw=String(q||'').trim();return wakeNameDetected(raw)&&!stripMeetingWakePrefix(raw).replace(/[\s,.:;!?؟-]+/g,'');}
+function isQuestionPreamble(q){const t=stripMeetingWakePrefix(q).toLowerCase().replace(/[?؟.!,:;]+$/g,'').trim();if(!t)return false;return /^(?:the )?question (?:is )?for you$|^i (?:have|got) (?:a|one) question(?: for you)?$|^i want to ask you (?:a|one|something)$|^(?:one|another) (?:question|thing)(?: for you)?$|^(?:listen|listen to me)$|^the question for you$/i.test(t);}
+function armMeetingAddressHold(reason){meetingAddressHoldUntil=Date.now()+MEETING_ADDRESS_HOLD_MS;document.getElementById('conversationStatus').textContent='Conversation: '+reason+' — Adam is listening for the rest of the participant turn';micStatus.textContent='Microphone: Adam addressed — waiting for the actual question';}
+function meetingAddressHoldActive(){return Date.now()<meetingAddressHoldUntil;}
+function explicitOtherProjectReferenceLocal(q){
+ const active=normalizeAutoQuestion((document.getElementById('projectReference')||{}).value||'').split(' ').filter(x=>x.length>=2);if(!active.length)return false;
+ const raw=String(q||'').toLowerCase();const cross=/\b(compare|comparison|compared|benchmark|reference|referencing|similar to|like the|lesson|example|versus|vs\.?|same as|different from)\b/i.test(raw);if(cross)return false;
+ const names=[];for(const re of [/\bfor\s+([a-z0-9_-]{2,})\s+project\b/ig,/\b([a-z0-9_-]{2,})\s+project\b/ig,/\bproject\s+([a-z0-9_-]{2,})\b/ig]){let m;while((m=re.exec(raw)))names.push(m[1].toLowerCase());}
+ return names.some(n=>!active.includes(n));
+}
+function likelyClarificationReply(q){
+ const raw=String(q||'').trim();if(!raw)return false;
+ if(Date.now()-meetingClarificationAt>MEETING_CLARIFICATION_WINDOW_MS){meetingAwaitingClarification=false;meetingClarificationPrompt='';meetingClarificationAt=0;return false;}
+ if(looksLikeLowInformationNoise(raw))return false;
+ if(wakeNameDetected(raw)||likelyDirectQuestion(raw))return true;
+ const words=normalizeAutoQuestion(raw).split(' ').filter(Boolean);
+ return words.length>=2||/^(yes|no|correct|exactly|variation|rfi|نعم|اي|إي|لا|صح|مظبوط)$/i.test(raw);
+}
+function likelyDirectQuestion(q){
+ let t=String(q||'').trim();if(!t||isWakeOnly(t)||isQuestionPreamble(t))return false;t=stripMeetingWakePrefix(t);
+ if(/[?؟]/.test(t))return true;
+ const lines=t.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+ return lines.some(line=>/^(who|what|when|where|why|how|can|could|would|will|is|are|do|does|did|should|please explain|شو|شوو|مين|وين|امتى|إمتى|ليش|كيف|هل|قديش|متى|ماذا|ما هو|ما هي|pourquoi|comment|quand|où|que|quel|quelle|quién|qué|cuándo|dónde|por qué|cómo)\b/i.test(line));
+}
+function likelyMeetingCorrection(q){
+ const raw=String(q||'').trim();if(!raw||looksLikeLowInformationNoise(raw))return false;
+ const t=stripMeetingWakePrefix(raw).toLowerCase();
+ return /\b(i (?:did not|didn't|never) say|i said|what i said was|no[, ]+i (?:said|mean|meant)|no[, ]+not that|that's not what i said|that is not what i said|you misunderstood|you misheard|correction|correct that|actually[, ]|i mean|i meant)\b/i.test(t)||/(?:ما قلت|أنا قلت|انا قلت|قصدي|كنت قصدي|مش هيك|مو هيك|صحح|تصحيح|لا[،, ]+قصدي)/i.test(raw);
+}
+function likelyMeetingOrder(q){
+ const raw=String(q||'').trim();if(!raw||looksLikeLowInformationNoise(raw))return false;
+ const t=stripMeetingWakePrefix(raw).toLowerCase();
+ // v8.4.1.12.2: orders/recommendation requests are often preceded by context,
+ // e.g. "The contractor says ... Give your recommendation." Detect imperative
+ // clauses after sentence punctuation as well as at the start of the turn.
+ const imperative=/(?:^|[.!?؟;:]\s*)(?:please\s+)?(?:remember|note|record|capture|check|review|explain|tell(?:\s+(?:us|me))?|show|give(?:\s+(?:us|me|your))?|advise(?:\s+(?:us|me))?|recommend|provide(?:\s+(?:us|me))?|confirm|prepare|draft|summarize|summarise|compare|calculate|find|keep|focus|continue|stop|wait|add|remove|correct|change|update|use|do not|don't|make sure)\b/i;
+ const recommendation=/\b(?:give|provide)\s+(?:us|me|your)\s+(?:a\s+)?recommendation\b|\bwhat\s+do\s+you\s+recommend\b/i;
+ return imperative.test(t)||recommendation.test(t)||/(?:^|[.!?؟;:]\s*)(?:سجّل|سجل|تذكّر|تذكر|احفظ|دوّن|دون|راجع|اشرح|خبرني|قلّي|قلي|حضّر|حضر|صحح|عدّل|عدل|ركّز|ركز|كمّل|كمل|وقف|استنى)\b/i.test(raw);
+}
+function meetingConversationTurnKind(q){
+ if(likelyDirectQuestion(q))return 'question';
+ if(likelyMeetingCorrection(q))return 'correction';
+ if(likelyMeetingOrder(q))return 'order';
+ if(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))return 'addressed_comment';
+ return 'statement';
+}
+function likelyMeaningfulMeetingInteraction(q){
+ const kind=meetingConversationTurnKind(q);
+ if(kind==='question'||kind==='correction'||kind==='order'||kind==='addressed_comment')return true;
+ const recentAdam=meetingLastSpokenAt&&Date.now()-meetingLastSpokenAt<45000;
+ return !!(recentAdam&&String(q||'').trim().split(/\s+/).length>=4&&/\b(?:yes|no|correct|wrong|but|however|instead|also|then|so|because|regarding|about|for this|on this)\b/i.test(String(q||'')));
+}
+function proactiveInterventionReason(q){
+ const style=(document.getElementById('participationStyle')||{}).value||'balanced';
+ if(style==='conservative')return '';
+ const t=String(q||'').trim();if(!t||looksLikeLowInformationNoise(t))return '';const low=t.toLowerCase();
+ if(/\b(mohamad|owner)\b.{0,60}\b(approved|agreed|accepted|will pay|will purchase|will commit|will submit|confirmed)\b/i.test(t))return 'possible owner commitment or position stated by another participant';
+ if(/\b(approved|agreed|accepted|confirm(?:ed)?|variation|cost|payment|purchase|quotation|price|contractual|entitlement|committed date|change date)\b/i.test(t)&&/\b(we|client|contractor|consultant|owner|mohamad|adam)\b/i.test(t))return 'possible consequential decision, approval, cost, or contractual commitment';
+ if(style==='proactive'){
+  if(/\b(action item|please submit|please provide|need to submit|need to provide|by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|deadline|due date)\b/i.test(t))return 'material action or deadline may need to be captured for the owner';
+  if(/\b(clash|high velocity|pressure drop|undersized|overload|non[- ]?compliance|safety risk|fire risk|leak|failure|not compliant)\b/i.test(t))return 'material technical or compliance risk may need a brief intervention';
+ }
+ return '';
+}
+function wakeNameDetected(q){return /\badam\b|آدم|ادم|ادام/i.test(String(q||''));}
+function syncRepresentativeApproval(){
+ const repMode=modeEl.value==='owner_representative';
+ const mainApproved=document.getElementById('approved').checked;
+ const hiddenRep=document.getElementById('representativeApproved');if(hiddenRep)hiddenRep.checked=repMode&&mainApproved;
+ const auto=document.getElementById('autoRespond');if(auto&&repMode)auto.checked=mainApproved;
+ const autoStatus=document.getElementById('autoStatus');if(autoStatus)autoStatus.innerHTML='<b>Representative auto-response:</b> '+(repMode?(mainApproved?'ARMED — Adam will answer focused questions, corrections and orders':'not armed — check Owner Approval'):'not used in this mode');
+ const status=document.getElementById('conversationStatus');if(status&&repMode)status.textContent=mainApproved?'Conversation: representative auto-response armed — ready for questions, corrections and orders':'Conversation: representative mode ready — check Owner Approval above to arm answers';
+}
+function syncParticipant(){
+ const universalPanel=document.getElementById('universalAssistantPanel');const participant=document.getElementById('participantPanel');if(participant&&universalPanel&&participant.parentNode===universalPanel.parentNode&&participant.nextElementSibling!==universalPanel){universalPanel.parentNode.insertBefore(participant,universalPanel);}
+ participantPanel.style.display=(modeEl.value==='active_participant'||modeEl.value==='owner_representative')?'block':'none';
+ const rep=document.getElementById('representativePanel');if(rep)rep.style.display=modeEl.value==='owner_representative'?'block':'none';
+ const label=document.getElementById('approvedLabel');if(label)label.textContent=modeEl.value==='owner_representative'?'Owner Approval — allow Adam to listen/capture and act as my disclosed AI representative for this meeting session':'Owner Approval — allow Adam to listen/capture this meeting';
+ const manual=document.getElementById('manualSpeakApprovalRow');if(manual)manual.style.display=modeEl.value==='owner_representative'?'none':'flex';
+ const auth=document.getElementById('authorizeSpeak');if(auth)auth.style.display=modeEl.value==='owner_representative'?'none':'inline-block';
+ const answerTrigger=document.getElementById('answerTrigger');if(answerTrigger&&modeEl.value==='owner_representative'&&answerTrigger.value==='adam')answerTrigger.value='adam_or_question';
+ syncRepresentativeApproval();
+} modeEl.addEventListener('change',syncParticipant);document.getElementById('approved').addEventListener('change',syncRepresentativeApproval); syncParticipant();
+function approved(){return document.getElementById('approved').checked;}
+function queueAutomaticQuestion(q,questionId=''){
+ const text=String(q||'').trim();if(!text)return;const key=normalizeAutoQuestion(text);
+ if(key&&key===meetingAutoInFlightKey)return;
+ const exists=meetingQuestionQueue.some(x=>normalizeAutoQuestion((x&&x.text)||x)===key);if(!exists)meetingQuestionQueue.push({text,questionId:String(questionId||'')});
+ document.getElementById('conversationStatus').textContent='Conversation: participant interaction captured — queued for Adam';
+}
+async function processAutomaticQuestionQueue(){
+ if(meetingAutoResponseBusy||!meetingQuestionQueue.length)return;
+ const next=meetingQuestionQueue.shift();await triggerAutomaticConversation((next&&next.text)||next,{questionId:String((next&&next.questionId)||'')});
+}
+async function triggerAutomaticConversation(q,options={}){
+ const key=normalizeAutoQuestion(q);const now=Date.now();const questionId=String(options.questionId||newMeetingQuestionId());
+ if(key&&key===meetingAutoInFlightKey)return true;
+ if(key&&key===meetingLastAutoQuestion&&now-meetingLastAutoAt<15000)return true;
+ if(meetingAutoResponseBusy){queueAutomaticQuestion(q,questionId);return true;}
+ meetingAutoResponseBusy=true;meetingAutoInFlightKey=key;document.getElementById('conversationInput').value=q;
+ meetingLatencyTrace.questionId=questionId;meetingLatencyTrace.dispatchAt=Date.now();renderMeetingLatencyTrace();
+ setMeetingReplyTrace(2,'representative dispatch started',questionId);
+ let handled=false;
+ try{handled=await runInteractiveConversation(q,{questionId,attempt:0});if(handled){meetingLastAutoQuestion=key;meetingLastAutoAt=Date.now();}return !!handled;}finally{meetingAutoResponseBusy=false;if(meetingAutoInFlightKey===key)meetingAutoInFlightKey='';setTimeout(processAutomaticQuestionQueue,100);}
+}
+function scheduleAutomaticConversationAfterEndOfTurn(q,questionId='',options={}){
+ const part=String(q||'').trim();if(!part)return;
+ const finalBoundary=!!options.finalBoundary;
+ meetingPendingAutoParts.push(part);if(!meetingPendingAutoQuestionId)meetingPendingAutoQuestionId=String(questionId||'');
+ if(!meetingPendingAutoStartedAt)meetingPendingAutoStartedAt=Date.now();
+ meetingLastAcceptedTranscriptAt=Date.now();
+ if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}
+ const check=()=>{
+  if(!meetingPendingAutoParts.length){meetingPendingAutoStartedAt=0;return;}
+  // v8.4.1.6: a VAD silence boundary is a candidate end-of-turn, not an
+  // immediate permission to answer. Keep a short merge grace so a natural
+  // speaking pause does not split one professional sentence into two questions.
+  const now=Date.now();
+  const acceptedQuietFor=now-(meetingLastAcceptedTranscriptAt||now);
+  const waitedFor=now-(meetingPendingAutoStartedAt||now);
+  const waitingForTranscription=meetingTranscriptionsPending>0;
+  const fastComplete=finalBoundary&&meetingTextLooksCompleteForFastReply(meetingPendingAutoParts.join(' '));
+  const requiredStability=finalBoundary?(fastComplete?MEETING_FINAL_TURN_FAST_COMPLETE_GRACE_MS:MEETING_FINAL_TURN_MERGE_GRACE_MS):MEETING_RESPONSE_STABILITY_MS;
+  const participantContinuation=finalBoundary&&meetingVadAvailable&&meetingUtteranceSpeechStarted&&meetingUtteranceLastSpeechAt>0&&(now-meetingUtteranceLastSpeechAt)<MEETING_CONTINUATION_SPEECH_HOLD_MS;
+  const stable=acceptedQuietFor>=requiredStability;
+  const maxWait=finalBoundary?MEETING_FINAL_TURN_MAX_WAIT_MS:MEETING_MAX_AUTOREPLY_WAIT_MS;
+  const watchdog=waitedFor>=maxWait;
+  if((waitingForTranscription||participantContinuation||!stable)&&!watchdog){
+   micStatus.textContent='Microphone: listening — Adam is waiting for the participant to finish the full turn';
+   meetingPendingAutoTimer=setTimeout(check,250);return;
+  }
+  const combined=meetingPendingAutoParts.join(' ').replace(/\s+/g,' ').trim();const questionIdForTurn=meetingPendingAutoQuestionId||newMeetingQuestionId();
+  meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoTimer=null;meetingPendingAutoStartedAt=0;
+  if(combined){micStatus.textContent=watchdog?'Microphone: response watchdog — Adam is answering captured interaction':'Microphone: participant turn complete — Adam is answering';triggerAutomaticConversation(combined,{questionId:questionIdForTurn});}
+ };
+ meetingPendingAutoTimer=setTimeout(check,Math.min(finalBoundary?(meetingTextLooksCompleteForFastReply(meetingPendingAutoParts.join(' '))?MEETING_FINAL_TURN_FAST_COMPLETE_GRACE_MS:MEETING_FINAL_TURN_MERGE_GRACE_MS):MEETING_RESPONSE_STABILITY_MS,700));
+}
+function normalizeEchoText(t){return String(t||'').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu,' ').trim();}
+function looksLikeAdamSpeakerEcho(q){
+ if(!meetingLastSpokenText||Date.now()-meetingLastSpokenAt>12000)return false;
+ const heard=normalizeEchoText(q),spoken=normalizeEchoText(meetingLastSpokenText);if(heard.length<10||spoken.length<10)return false;
+ if(spoken.includes(heard)||heard.includes(spoken))return true;
+ const hw=new Set(heard.split(' ').filter(x=>x.length>2)),sw=new Set(spoken.split(' ').filter(x=>x.length>2));if(!hw.size)return false;
+ let overlap=0;for(const w of hw)if(sw.has(w))overlap++;return overlap/hw.size>=0.78;
+}
+function rememberMeetingUtterance(q,questionId=''){
+ const text=String(q||'').trim();if(!text)return;
+ const sid=meetingConversationSessionId;
+ meetingMemorySyncQueue=meetingMemorySyncQueue.catch(()=>{}).then(()=>fetch('/api/personal-assistant/meeting-conversation/note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,question_id:String(questionId||''),utterance_id:String(questionId||''),text,owner_approved:approved()})})).catch(()=>{});
+}
+function stopAdamSpeechForBargeIn(){
+ if(!meetingAdamSpeaking)return false;meetingVoiceJobSeq++;
+ try{if(meetingAdamAudio){meetingAdamAudio.pause();meetingAdamAudio.currentTime=0;}}catch(_){}
+ try{if(meetingAdamAudioContextSource){meetingAdamAudioContextSource.stop();meetingAdamAudioContextSource=null;}}catch(_){}
+ try{if('speechSynthesis' in window)speechSynthesis.cancel();}catch(_){}
+ if(meetingAdamAudioUrl){try{URL.revokeObjectURL(meetingAdamAudioUrl);}catch(_){}meetingAdamAudioUrl='';}
+ meetingAdamAudio=null;meetingAdamSpeaking=false;
+ const resolver=meetingAdamSpeechResolve;meetingAdamSpeechResolve=null;if(resolver)resolver('interrupted — listening to participant');
+ document.getElementById('conversationStatus').textContent='Conversation: Adam paused — participant interruption captured';
+ return true;
+}
+function dedupeConsecutiveTranscriptLines(text){
+ const out=[];let previous='';
+ for(const raw of String(text||'').split(/\n+/)){
+  const line=raw.trim();if(!line)continue;const key=normalizeAutoQuestion(line);
+  if(key&&key===previous)continue;out.push(line);previous=key;
+ }
+ return out.join('\n').trim();
+}
+async function dispatchCompletedParticipantTurn(q,questionId=''){
+ let parts=meetingPendingAutoParts.slice();meetingPendingAutoParts=[];
+ const questionIdForTurn=meetingPendingAutoQuestionId||String(questionId||'')||newMeetingQuestionId();meetingPendingAutoQuestionId='';
+ if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}
+ if(q)parts.push(q);
+ const merged=[];let last='';
+ for(const part of parts){const t=String(part||'').trim(),k=normalizeAutoQuestion(t);if(!t||!k||k===last)continue;merged.push(t);last=k;}
+ const combined=merged.join(' ').replace(/\s+/g,' ').trim();
+ if(!combined)return false;
+ micStatus.textContent='Microphone: participant finished — Adam is answering';
+ return await triggerAutomaticConversation(combined,{questionId:questionIdForTurn});
+}
+async function handleFinalMeetingText(text,options={}){
+ const sourceSessionId=String(options.sessionId||meetingConversationSessionId);const sourceSessionEpoch=Number(options.sessionEpoch||meetingSessionEpoch);
+ if(sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch){micStatus.textContent='Microphone: stale prior-meeting audio ignored';return true;}
+ const q=dedupeConsecutiveTranscriptLines(text); if(!q)return;
+ if(looksLikeAdamSpeakerEcho(q)){micStatus.textContent='Microphone: listening — Adam speaker echo filtered';return;}
+ const now=Date.now(),qKey=normalizeAutoQuestion(q);
+ if(looksLikeLowInformationNoise(q)&&!wakeNameDetected(q)&&!meetingAwaitingClarification){micStatus.textContent='Microphone: transient low-information speech ignored — listening';return true;}
+ // v8.4.1.2 — suppress duplicate completed STT callbacks BEFORE the async
+ // focus check. Previously two callbacks could both enter the server while the
+ // first was waiting on focus/AI and create duplicate Processing questions.
+ if(qKey&&qKey===meetingLastFocusCandidateText&&now-meetingLastFocusCandidateAt<12000){
+  if(options.finalTurn)micStatus.textContent='Microphone: duplicate completed turn ignored — listening';
+  return true;
+ }
+ meetingLastFocusCandidateText=qKey;meetingLastFocusCandidateAt=now;
+ // v8.4.1.6 — if the prior VAD-bounded fragment is still waiting in the
+ // merge buffer, this is a continuation of the same participant turn. Reuse
+ // the stable id so focus telemetry and question coverage count one turn, not
+ // several fragments separated by natural pauses.
+ const pendingTurnId=(meetingPendingAutoParts.length&&meetingPendingAutoQuestionId)?meetingPendingAutoQuestionId:'';
+ const proposedQuestionId=String(options.questionId||pendingTurnId||newMeetingQuestionId());
+ const focus=await checkMeetingFocus(q,{...options,questionId:proposedQuestionId,sessionId:sourceSessionId,sessionEpoch:sourceSessionEpoch});
+ if(focus&&focus.session_id)meetingConversationSessionId=String(focus.session_id);
+ const stableQuestionId=String((focus&&focus.question_id)||proposedQuestionId);
+ if(!(focus&&focus.accept===false))setMeetingReplyTrace(1,'speech accepted',stableQuestionId);
+ if(focus&&focus.accept===false){micStatus.textContent=(focus.hard_project_mismatch?'Microphone: other-project speech filtered — active project protected':'Microphone: filtered side-room speech — not added to meeting record');document.getElementById('conversationStatus').textContent=focus.hard_project_mismatch?'Conversation: explicit other-project speech ignored — Adam remains anchored to '+((document.getElementById('projectReference')||{}).value||'the active project'):'Conversation: background / other-project speech ignored — Adam remains focused on this meeting';return true;}
+ if(isWakeOnly(q)){armMeetingAddressHold('Adam heard his name');return true;}
+ if(isQuestionPreamble(q)){armMeetingAddressHold('Question preamble heard');return true;}
+ const addressContinuation=meetingAddressHoldActive()&&!looksLikeLowInformationNoise(q);if(addressContinuation)meetingAddressHoldUntil=0;
+ meetingLastTranscriptText=qKey;meetingLastTranscriptAt=Date.now();meetingLastAcceptedTranscriptAt=Date.now();
+ transcript.value+=(transcript.value && !transcript.value.endsWith('\n')?'\n':'')+q+'\n';
+ transcript.scrollTop=transcript.scrollHeight;rememberMeetingUtterance(q,stableQuestionId);
+ const trigger=document.getElementById('answerTrigger').value;
+ const representativeMode=modeEl.value==='owner_representative';
+ const representativeArmed=representativeMode && approved();
+ const clarificationFollowup=representativeMode&&meetingAwaitingClarification&&likelyClarificationReply(q);
+ const proactiveReason=representativeMode?proactiveInterventionReason(q):'';
+ const conversationalInteraction=representativeMode&&likelyMeaningfulMeetingInteraction(q);
+ const addressed=(trigger==='every_final'||(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||(trigger==='adam_or_question'&&representativeMode&&(likelyDirectQuestion(q)||conversationalInteraction))||clarificationFollowup||addressContinuation||!!proactiveReason);
+ const activeParticipantArmed=!representativeMode && document.getElementById('autoRespond').checked && document.getElementById('conversationApproved').checked;
+ if(addressed && (representativeArmed||activeParticipantArmed)){
+  rememberParticipantQuestion(q);
+  if(proactiveReason)document.getElementById('conversationStatus').textContent='Conversation: material meeting issue detected — Adam is evaluating whether to intervene';
+  if(meetingAdamSpeaking)stopAdamSpeechForBargeIn();
+  if(options.finalTurn&&options.source==='typed')return await dispatchCompletedParticipantTurn(q,stableQuestionId);else scheduleAutomaticConversationAfterEndOfTurn(q,stableQuestionId,{finalBoundary:!!options.finalTurn});
+ }else if(addressed && representativeMode && !representativeArmed){
+  document.getElementById('conversationStatus').textContent='Conversation: participant question detected — check Owner Approval above before Adam answers';
+ }
+ return true;
+}
+async function sendTypedMeetingQuery(){
+ primeMeetingVoice();
+ const input=document.getElementById('meetingTextQuery');
+ const status=document.getElementById('meetingTextQueryStatus');
+ const text=String((input||{}).value||'').trim();
+ if(!text){if(status)status.textContent='Typed meeting input: enter a question, comment, correction, or order';return;}
+ if(status)status.textContent='Typed meeting input: sending to Adam…';
+ if(input)input.value='';
+ try{
+  const handled=await handleFinalMeetingText(text,{finalTurn:true,source:'typed'});
+  if(status)status.textContent=handled===false?'Typed meeting input: captured but Adam did not produce a representative reply':(meetingLastVoiceDeliveryOk?'Typed meeting input: answered by Meeting Representative — text and voice delivery completed':'Typed meeting input: answered by Meeting Representative — text ready; voice playback did not complete');
+ }catch(e){
+  if(status)status.textContent='Typed meeting input: failed — '+String(e&&e.message||e);
+ }
+}
+function setupRecognition(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){micStatus.textContent='Microphone speech recognition is not supported by this browser. Use manual transcript fallback.';return null;}
+ const r=new SR(); r.continuous=true; r.interimResults=true; const ml=document.getElementById('meetingLanguage').value; r.lang=(ml==='ar-LB')?'ar-LB':(ml==='auto'?(navigator.language||'en-US'):ml);
+ r.onresult=(ev)=>{let finalText='';for(let i=ev.resultIndex;i<ev.results.length;i++){if(ev.results[i].isFinal)finalText+=ev.results[i][0].transcript+'\n';}if(finalText){if(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive){micStatus.textContent='Microphone: Adam speaker echo protected — waiting for his reply to finish';return;}handleFinalMeetingText(finalText,{source:'browser_recognition',sessionId:meetingRecognitionSessionId,sessionEpoch:meetingRecognitionSessionEpoch});}};
+ r.onerror=(e)=>{micStatus.textContent='Microphone: '+e.error;}; r.onend=()=>{if(listening){try{r.start();}catch(_){}}else micStatus.textContent='Microphone: stopped';}; return r;
+}
+function preferredMeetingMime(){
+ const types=['audio/webm;codecs=opus','audio/webm','audio/mp4'];
+ for(const t of types){try{if(window.MediaRecorder&&MediaRecorder.isTypeSupported(t))return t;}catch(_){}}
+ return '';
+}
+async function transcribeMeetingBlob(blob,captureMs,finalTurn=false,focusSignal={},captureSessionId=meetingConversationSessionId,captureSessionEpoch=meetingSessionEpoch){
+ if(!blob||!blob.size)return;
+ const sourceSessionId=String(captureSessionId||'');const sourceSessionEpoch=Number(captureSessionEpoch||0);
+ if(sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch)return;
+ const fd=new FormData(); const mime=blob.type||'audio/webm'; const ext=mime.includes('mp4')?'m4a':'webm';
+ fd.append('audio',blob,'meeting.'+ext);fd.append('owner_approved','true');fd.append('language',document.getElementById('meetingLanguage').value);fd.append('capture_ms',String(Math.max(0,Number(captureMs)||0)));fd.append('technical_context',(((document.getElementById('meetingFocusAgenda')||{}).value||'')+' '+((document.getElementById('ownerBriefing')||{}).value||'')+' '+transcript.value.slice(-1200)).slice(-2200));
+ micStatus.textContent='Microphone: listening — transcribing multilingual speech…';
+ meetingLatencyTrace.sttStartAt=Date.now();renderMeetingLatencyTrace();
+ try{
+  const r=await fetch('/api/personal-assistant/real-meeting-attendance/transcribe',{method:'POST',body:fd});const j=await r.json();meetingLatencyTrace.sttEndAt=Date.now();renderMeetingLatencyTrace();
+  if(!r.ok||!j.ok)throw new Error(j.error||j.status||'meeting_transcription_failed');
+  if(sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch)return;
+  if(j.text)await handleFinalMeetingText(j.text,{finalTurn:!!finalTurn,source:'microphone_server',sessionId:sourceSessionId,sessionEpoch:sourceSessionEpoch,peak_rms:Number(focusSignal.peak_rms||0),noise_floor:Number(focusSignal.noise_floor||0),vad_available:!!focusSignal.vad_available});
+  if(listening)micStatus.textContent='Microphone: listening — multilingual server transcription';
+ }catch(e){micStatus.textContent='Microphone transcription error: '+String(e&&e.message||e);}
+}
+function startMeetingVoiceActivityMonitor(){
+ const AC=window.AudioContext||window.webkitAudioContext;meetingVadAvailable=false;
+ if(!AC||!meetingMicStream)return false;
+ try{
+  meetingAudioContext=new AC();
+  if(meetingAudioContext.state==='suspended'&&meetingAudioContext.resume){meetingAudioContext.resume().catch(()=>{});}
+  const source=meetingAudioContext.createMediaStreamSource(meetingMicStream);
+  meetingAnalyser=meetingAudioContext.createAnalyser();meetingAnalyser.fftSize=1024;source.connect(meetingAnalyser);
+  const samples=new Uint8Array(meetingAnalyser.fftSize);meetingVadAvailable=true;
+  meetingLevelTimer=setInterval(()=>{
+   if(!meetingAnalyser||!listening)return;
+   try{
+    if(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive){meetingRecorderContainsAdamAudio=true;meetingChunkSpeechFrames=0;meetingUtteranceSpeechStarted=false;meetingUtteranceFirstSpeechAt=0;meetingUtteranceLastSpeechAt=0;return;}
+    meetingAnalyser.getByteTimeDomainData(samples);let sum=0;
+    for(let i=0;i<samples.length;i++){const x=(samples[i]-128)/128;sum+=x*x;}
+    const rms=Math.sqrt(sum/samples.length);meetingPeakRms=Math.max(meetingPeakRms,rms);
+    // Adaptive threshold remains above the measured room noise but is sensitive enough
+    // for normal laptop microphones and quiet speech. Two frames ~=160 ms of speech.
+    const threshold=Math.max(0.006,meetingNoiseFloor*2.2);
+    if(rms>threshold){
+     meetingChunkSpeechFrames++;
+     const now=Date.now();meetingUtteranceSpeechStarted=true;if(!meetingUtteranceFirstSpeechAt)meetingUtteranceFirstSpeechAt=now;meetingUtteranceLastSpeechAt=now;meetingLastParticipantSpeechAt=now;
+     // v8.4.1.11.1: freeze the participant speech-end timestamp once STT/dispatch begins.
+     // Browser/device speech can reach the microphone a few milliseconds before its
+     // onstart callback flips speaker protection. Updating speechEndAt at that point
+     // made voiceStartAt-speechEndAt negative, which rendered as a false 0.0s total.
+     if(!meetingLatencyTrace.sttStartAt&&!meetingLatencyTrace.aiStartAt&&!meetingAutoResponseBusy&&!meetingSpeakerOutputActive){meetingLatencyTrace.speechEndAt=now;}
+     if(meetingChunkSpeechFrames===2){
+      // v8.4.1.11.2: a completed prior turn must not donate its speechEndAt to the
+      // next participant utterance. v8.4.1.11.1 correctly froze speechEndAt during
+      // STT/AI/voice work, but the completed trace retained questionId/aiStartAt.
+      // That meant the first real speech after Adam finished could inherit a stale
+      // timestamp and display impossible end-turn values such as 62.6s.
+      const priorTurnComplete=!!(meetingLatencyTrace.voiceStartAt||meetingLatencyTrace.aiEndAt);
+      const freshParticipantTurn=priorTurnComplete&&!meetingAutoResponseBusy&&!meetingSpeakerOutputActive&&!meetingAdamSpeaking;
+      if(freshParticipantTurn||(!meetingAutoResponseBusy&&!meetingLatencyTrace.aiStartAt&&!meetingLatencyTrace.questionId)){
+       meetingLatencyTrace={speechEndAt:now,sttStartAt:0,sttEndAt:0,dispatchAt:0,aiStartAt:0,aiEndAt:0,voiceStartAt:0,questionId:'',providerMs:0,fastPath:false,endTurnMode:''};
+      }else if(!meetingLatencyTrace.speechEndAt){meetingLatencyTrace.speechEndAt=now;}
+      renderMeetingLatencyTrace();micStatus.textContent='Microphone: listening — speech detected; Adam will answer after a natural pause';
+     }
+    }else{
+     meetingNoiseFloor=Math.max(0.001,Math.min(0.02,(meetingNoiseFloor*0.985)+(rms*0.015)));
+    }
+   }catch(_){meetingVadAvailable=false;}
+  },80);
+  return true;
+ }catch(_){meetingAnalyser=null;meetingVadAvailable=false;return false;}
+}
+function stopMeetingVoiceActivityMonitor(){
+ if(meetingLevelTimer){clearInterval(meetingLevelTimer);meetingLevelTimer=null;}meetingAnalyser=null;meetingVadAvailable=false;
+ if(meetingAudioContext){try{meetingAudioContext.close();}catch(_){}meetingAudioContext=null;}
+}
+function recordNextMultilingualChunk(){
+ if(!listening||!meetingMicStream)return;
+ const recorderSessionId=meetingConversationSessionId;const recorderSessionEpoch=meetingSessionEpoch;
+ const chunks=[]; const mime=preferredMeetingMime();meetingChunkSpeechFrames=0;meetingPeakRms=0;meetingUtteranceSpeechStarted=false;meetingUtteranceFirstSpeechAt=0;meetingUtteranceLastSpeechAt=0;meetingRecorderStartedAt=Date.now();meetingRecorderStopReason='';meetingRecorderContainsAdamAudio=!!(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive);
+ try{meetingRecorder=new MediaRecorder(meetingMicStream,mime?{mimeType:mime}:undefined);}catch(e){micStatus.textContent='Microphone: MediaRecorder '+e.message;return;}
+ meetingRecorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+ meetingRecorder.onstop=()=>{
+  if(meetingChunkTimer){clearInterval(meetingChunkTimer);meetingChunkTimer=null;}
+  const captureMs=Math.max(0,Date.now()-meetingRecorderStartedAt);const blob=new Blob(chunks,{type:(meetingRecorder&&meetingRecorder.mimeType)||mime||'audio/webm'});
+  // If WebAudio VAD is unavailable, upload the bounded capture and let the server-side
+  // hallucination guard decide. With VAD, only actual participant speech is transcribed.
+  const hadSpeech=(!meetingRecorderContainsAdamAudio)&&(!meetingVadAvailable||meetingChunkSpeechFrames>=2);
+  const finalTurn=(meetingRecorderStopReason==='end_of_turn'||meetingRecorderStopReason==='max_utterance');
+  const focusSignal={peak_rms:meetingPeakRms,noise_floor:meetingNoiseFloor,vad_available:meetingVadAvailable,speech_frames:meetingChunkSpeechFrames};
+  if(blob.size&&hadSpeech){meetingTranscriptionsPending++;meetingTranscriptionQueue=meetingTranscriptionQueue.then(()=>transcribeMeetingBlob(blob,captureMs,finalTurn,focusSignal,recorderSessionId,recorderSessionEpoch)).finally(()=>{meetingTranscriptionsPending=Math.max(0,meetingTranscriptionsPending-1);});}
+  else if(listening)micStatus.textContent='Microphone: listening — waiting for speech';
+  if(listening)setTimeout(recordNextMultilingualChunk,(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive)?220:40);
+ };
+ meetingRecorder.start();
+ meetingChunkTimer=setInterval(()=>{
+  if(!meetingRecorder||meetingRecorder.state!=='recording')return;
+  const now=Date.now();const elapsed=now-meetingRecorderStartedAt;
+  const spokenSpan=(meetingUtteranceFirstSpeechAt&&meetingUtteranceLastSpeechAt)?Math.max(0,meetingUtteranceLastSpeechAt-meetingUtteranceFirstSpeechAt):0;
+  const fastResponseEnabled=!!((document.getElementById('meetingFastResponse')||{}).checked);
+  const useFastEndTurn=fastResponseEnabled&&spokenSpan>0&&spokenSpan<=MEETING_FAST_TURN_MAX_SPEECH_MS;
+  const endOfTurnSilenceMs=useFastEndTurn?MEETING_FAST_END_OF_TURN_SILENCE_MS:MEETING_END_OF_TURN_SILENCE_MS;
+  if(meetingUtteranceSpeechStarted&&!meetingLatencyTrace.endTurnMode)meetingLatencyTrace.endTurnMode=useFastEndTurn?'fast':'protected';
+  const endOfTurn=meetingUtteranceSpeechStarted&&meetingChunkSpeechFrames>=2&&meetingUtteranceLastSpeechAt>0&&(now-meetingUtteranceLastSpeechAt)>=endOfTurnSilenceMs;
+  const silentBound=!meetingUtteranceSpeechStarted&&elapsed>=MEETING_SILENT_CHUNK_MS;
+  const maxBound=elapsed>=MEETING_MAX_UTTERANCE_MS;
+  if(endOfTurn){meetingRecorderStopReason='end_of_turn';micStatus.textContent='Microphone: natural pause detected — transcribing complete question';try{meetingRecorder.stop();}catch(_){}return;}
+  if(silentBound||maxBound){meetingRecorderStopReason=maxBound?'max_utterance':'silence';try{meetingRecorder.stop();}catch(_){}return;}
+ },160);
+}
+async function startMultilingualServerListening(){
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder)return false;
+ try{
+  const supported=navigator.mediaDevices.getSupportedConstraints?navigator.mediaDevices.getSupportedConstraints():{};const audioFocus={echoCancellation:true,noiseSuppression:true,autoGainControl:false,channelCount:1};if(supported.voiceIsolation)audioFocus.voiceIsolation=true;
+  meetingMicStream=await navigator.mediaDevices.getUserMedia({audio:audioFocus});listening=true;const vadOk=startMeetingVoiceActivityMonitor();
+  micStatus.textContent=vadOk?(meetingFocusLocked()?'Microphone: listening — Meeting Focus Lock ON':'Microphone: listening — multilingual server transcription'):'Microphone: listening — multilingual server transcription (VAD fallback)';recordNextMultilingualChunk();return true;
+ }catch(e){micStatus.textContent='Microphone: '+String(e&&e.message||e);return false;}
+}
+function stopMultilingualServerListening(){
+ listening=false;if(meetingChunkTimer){clearInterval(meetingChunkTimer);meetingChunkTimer=null;}
+ if(meetingRecorder&&meetingRecorder.state==='recording'){try{meetingRecorder.stop();}catch(_){}}
+ stopMeetingVoiceActivityMonitor();
+ if(meetingMicStream){for(const t of meetingMicStream.getTracks())try{t.stop();}catch(_){} meetingMicStream=null;}
+}
+document.getElementById('start').onclick=async()=>{
+ primeMeetingVoice();
+ if(!approved()){alert('Owner Approval is required before Adam listens to the meeting.');return;}
+ meetingRecognitionSessionId=meetingConversationSessionId;meetingRecognitionSessionEpoch=meetingSessionEpoch;
+ const ml=document.getElementById('meetingLanguage').value;
+ if(ml==='auto-multilingual'||ml==='auto-bilingual'){
+  const ok=await startMultilingualServerListening();if(ok)return;
+  micStatus.textContent='Microphone: multilingual server capture unavailable — using browser fallback';
+ }
+ if(!recognition)recognition=setupRecognition();if(!recognition)return;listening=true;
+ try{recognition.start();micStatus.textContent='Microphone: listening — Adam AI assistant';}catch(e){micStatus.textContent='Microphone: '+e.message;}
+};
+document.getElementById('stop').onclick=()=>{stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}micStatus.textContent='Microphone: stopped';};
+document.getElementById('clear').onclick=()=>{transcript.value='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('conversationStatus').textContent='Conversation: transcript screen cleared — Adam retained meeting memory and reply history';document.getElementById('out').textContent='Screen cleared. Meeting memory retained; Adam\'s latest reply, reply history, and participant question history are retained until End Meeting / New Session.';};
+document.getElementById('endMeeting').onclick=async()=>{if(!confirm('End this meeting and clear Adam\'s temporary meeting memory for this session?'))return;const closingSessionId=meetingConversationSessionId;meetingSessionEpoch++;meetingRecognitionSessionEpoch=0;meetingRecognitionSessionId='';stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}stopAdamSpeechForBargeIn();if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}try{await meetingTranscriptionQueue.catch(()=>{});await meetingMemorySyncQueue.catch(()=>{});await fetch('/api/personal-assistant/meeting-conversation/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:closingSessionId})});}catch(_){ }meetingConversationHistory=[];meetingQuestionQueue=[];meetingAutoResponseBusy=false;meetingAutoInFlightKey='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;meetingLastAutoQuestion='';meetingLastAutoAt=0;meetingLastFocusCandidateText='';meetingLastFocusCandidateAt=0;meetingResponseHistory=[];meetingQuestionHistory=[];meetingDiscussionHistory=[];meetingFocusAcceptedCount=0;meetingFocusRejectedCount=0;meetingFocusEvents=[];meetingAddressHoldUntil=0;meetingAwaitingClarification=false;meetingClarificationPrompt='';meetingClarificationAt=0;meetingClarificationQuestionId='';meetingConversationSessionId=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);meetingConversationHistorySessionId=meetingConversationSessionId;meetingRecognitionSessionId=meetingConversationSessionId;meetingRecognitionSessionEpoch=meetingSessionEpoch;meetingIdentityDeclared=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastVoiceDeliveryOk=false;meetingLastSpokenText='';meetingLastTranscriptText='';meetingLastTranscriptAt=0;transcript.value='';document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('responseDraft').value='';document.getElementById('responseHistory').value='';document.getElementById('questionHistory').value='';document.getElementById('discussionRecord').value='';document.getElementById('meetingRegister').value='';document.getElementById('questionCoverage').value='';if(document.getElementById('focusMonitor'))document.getElementById('focusMonitor').value='';document.getElementById('meetingReport').value='';document.getElementById('conversationStatus').textContent='Conversation: new meeting session ready — prior session isolated';document.getElementById('out').textContent='Previous meeting session ended. Late audio/AI callbacks from it will be ignored.';resetMeetingReplyTrace();resetMeetingLatencyTrace();micStatus.textContent='Microphone: stopped';};
+document.getElementById('analyze').onclick=async()=>{
+ const out=document.getElementById('out');
+ const reportBox=document.getElementById('meetingReport');
+ const text=transcript.value.trim();
+ const segments=text?text.split(/\n+/).filter(Boolean).map(x=>({text:x})):[];
+ const body={platform:document.getElementById('platform').value,mode:document.getElementById('mode').value,owner_approved:approved(),segments};
+ try{
+  out.textContent='Analyzing meeting notes and generating the professional meeting report...';
+  const processResponse=await fetch('/api/personal-assistant/real-meeting-attendance/process',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const processJson=await processResponse.json().catch(()=>({}));
+  if(!processResponse.ok||!processJson.ok)throw new Error(processJson.status||'attendance_processing_failed');
+  const reportResponse=await fetch('/api/personal-assistant/meeting-conversation/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId,owner_approved:approved(),meeting_title:document.getElementById('meetingTitle').value,project_reference:document.getElementById('projectReference').value,participants:document.getElementById('meetingParticipants').value,meeting_datetime:document.getElementById('meetingDateTime').value})});
+  const reportJson=await reportResponse.json().catch(()=>({}));
+  if(!reportResponse.ok||!reportJson.ok)throw new Error(reportJson.status||'meeting_report_failed');
+  reportBox.value=reportJson.report||'';
+  out.textContent='Meeting report ready from '+String(reportJson.discussion_record_count||0)+' paired discussion records. Direct-question coverage: '+String(reportJson.answered_question_count||0)+' answered / '+String(reportJson.direct_question_count||0)+'; '+String(reportJson.processing_question_count||0)+' processing; '+String(reportJson.unanswered_question_count||0)+' unanswered. Action attribution: '+String(reportJson.participant_assigned_action_count||0)+' participant-assigned action(s), '+String(reportJson.adam_recommendation_count||0)+' Adam recommendation(s).';
+  if(reportBox&&reportBox.scrollIntoView)reportBox.scrollIntoView({behavior:'smooth',block:'center'});
+ }catch(e){
+  out.textContent='Analyze Meeting Notes failed: '+String(e&&e.message||e);
+ }
+};
+
+document.getElementById('prepareResponse').onclick=async()=>{const body={mode:'active_participant',context:transcript.value,response:document.getElementById('responseDraft').value};const r=await fetch('/api/personal-assistant/meeting-conversation/prepare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(j.response)document.getElementById('responseDraft').value=j.response;document.getElementById('speakStatus').textContent=j.ok?'Speaking: preview ready — approval required':'Speaking: '+j.status;};
+
+let meetingConversationHistory=[];
+let meetingConversationSessionId=(crypto && crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);
+let meetingConversationHistorySessionId=meetingConversationSessionId;let meetingSessionEpoch=1;let meetingRecognitionSessionId=meetingConversationSessionId;let meetingRecognitionSessionEpoch=meetingSessionEpoch;
+function meetingVoiceEnabled(){const el=document.getElementById('meetingAutoSpeak');return !el||!!el.checked;}
+function meetingSpeakerProtectionEnabled(){const el=document.getElementById('meetingSpeakerProtection');return !el||!!el.checked;}
+function markAdamSpeakerPlaybackStart(){meetingSpeakerOutputActive=true;meetingRecorderContainsAdamAudio=true;meetingChunkSpeechFrames=0;meetingUtteranceSpeechStarted=false;meetingUtteranceFirstSpeechAt=0;meetingUtteranceLastSpeechAt=0;if(!meetingLatencyTrace.voiceStartAt){meetingLatencyTrace.voiceStartAt=Date.now();renderMeetingLatencyTrace();}setMeetingVoiceStatus('speaking — laptop speaker protection active');}
+function restartCleanMeetingCaptureAfterAdamSpeech(){
+ meetingSpeakerOutputActive=false;
+ if(!meetingSpeakerProtectionEnabled()||!listening)return;
+ try{if(meetingRecorder&&meetingRecorder.state==='recording'){meetingRecorderStopReason='adam_speaker_guard';meetingRecorder.stop();}}catch(_){}
+}
+function setMeetingVoiceStatus(text){const el=document.getElementById('meetingVoiceStatus');if(el)el.textContent='Meeting voice: '+String(text||'');}
+function preferredBrowserMeetingVoice(language){
+ if(!('speechSynthesis' in window))return null;
+ const voices=speechSynthesis.getVoices()||[];const lang=String(language||'en-US').toLowerCase(),base=lang.split('-')[0];
+ return voices.find(v=>String(v.lang||'').toLowerCase()===lang)||voices.find(v=>String(v.lang||'').toLowerCase().startsWith(base+'-'))||voices.find(v=>String(v.lang||'').toLowerCase().startsWith(base))||null;
+}
+function primeMeetingVoice(){
+ meetingVoiceUnlocked=true;
+ try{
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(AC){if(!meetingVoiceUnlockContext)meetingVoiceUnlockContext=new AC();if(meetingVoiceUnlockContext.state==='suspended')meetingVoiceUnlockContext.resume().catch(()=>{});const b=meetingVoiceUnlockContext.createBuffer(1,Math.max(1,Math.floor(meetingVoiceUnlockContext.sampleRate*0.025)),meetingVoiceUnlockContext.sampleRate);const src=meetingVoiceUnlockContext.createBufferSource();src.buffer=b;src.connect(meetingVoiceUnlockContext.destination);src.start(0);}
+ }catch(_){}
+ try{if('speechSynthesis' in window)speechSynthesis.resume();}catch(_){}
+ setMeetingVoiceStatus('enabled — Adam will speak meeting replies automatically');
+ return true;
+}
+function speechFriendlyMeetingText(text){
+ return String(text||'').replace(/\*\*/g,'').replace(/`/g,'').replace(/^\s*[-•]\s+/gm,'').replace(/^\s*#{1,6}\s+/gm,'').replace(/\n{2,}/g,'. ').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+}
+function splitMeetingSpeechChunks(text,maxChars=180){
+ const clean=speechFriendlyMeetingText(text);if(!clean)return [];
+ const fast=document.getElementById('meetingFastVoice');if(fast&&!fast.checked)return [clean];
+ const sentences=clean.match(/[^.!?؟]+[.!?؟]+|[^.!?؟]+$/g)||[clean];const out=[];let buf='';
+ const pushHard=(part)=>{let p=String(part||'').trim();while(p.length>maxChars){let cut=p.lastIndexOf(' ',maxChars);if(cut<Math.floor(maxChars*0.55))cut=maxChars;out.push(p.slice(0,cut).trim());p=p.slice(cut).trim();}if(p)out.push(p);};
+ for(const raw of sentences){const sentence=raw.trim();if(!sentence)continue;if(sentence.length>maxChars){if(buf){out.push(buf);buf='';}pushHard(sentence);continue;}if(!buf)buf=sentence;else if((buf+' '+sentence).length<=maxChars)buf+=' '+sentence;else{out.push(buf);buf=sentence;}}
+ if(buf)out.push(buf);return out;
+}
+function browserSpeakMeetingText(text,language,jobId=meetingVoiceJobSeq,finalChunk=true){
+ return new Promise((resolve,reject)=>{
+  if(!('speechSynthesis' in window)){reject(new Error('browser speech unavailable'));return;}
+  try{
+   speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=String(language||'en-US');const v=preferredBrowserMeetingVoice(u.lang);if(v)u.voice=v;u.volume=1;u.rate=1;u.pitch=1;
+   let done=false;let speakerStarted=false;let startFallback=null;const markStarted=()=>{if(done||speakerStarted)return;speakerStarted=true;markAdamSpeakerPlaybackStart();};
+   const finish=(msg,err)=>{if(done)return;done=true;clearTimeout(timer);if(startFallback)clearTimeout(startFallback);meetingAdamSpeechResolve=null;if(speakerStarted){speakerStarted=false;if(finalChunk)restartCleanMeetingCaptureAfterAdamSpeech();else meetingSpeakerOutputActive=true;}if(err)reject(err);else resolve(msg);};
+   const timer=setTimeout(()=>finish('',new Error('browser voice timeout')),Math.max(12000,Math.min(45000,String(text||'').length*95)));
+   meetingAdamSpeechResolve=(msg)=>finish(msg||'interrupted',null);u.onstart=markStarted;u.onend=()=>finish('browser voice chunk completed',null);u.onerror=()=>finish('',new Error('browser voice error'));
+   if(jobId!==meetingVoiceJobSeq){finish('stale voice job',null);return;}speechSynthesis.speak(u);startFallback=setTimeout(()=>{try{if(speechSynthesis.speaking)markStarted();}catch(_){}},180);
+  }catch(e){meetingAdamSpeechResolve=null;reject(e);}
+ });
+}
+async function playServerMeetingChunk(text,locale,jobId,chunkIndex,chunkCount){
+ const finalChunk=Number(chunkIndex)>=Number(chunkCount);
+ const controller=('AbortController' in window)?new AbortController():null;const timeout=setTimeout(()=>{try{if(controller)controller.abort();}catch(_){}},12000);
+ try{
+  setMeetingVoiceStatus('preparing Adam voice — part '+chunkIndex+' of '+chunkCount);
+  const a=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,language:locale}),signal:controller?controller.signal:undefined});
+  if(!a.ok)throw new Error('TTS unavailable');const blob=await a.blob();if(!blob||!blob.size)throw new Error('empty TTS audio');if(jobId!==meetingVoiceJobSeq)throw new Error('stale voice job');
+  meetingAdamAudioUrl=URL.createObjectURL(blob);meetingAdamAudio=new Audio(meetingAdamAudioUrl);meetingAdamAudio.preload='auto';meetingAdamAudio.volume=1;meetingAdamAudio.muted=false;meetingAdamAudio.playsInline=true;
+  return await new Promise((resolve,reject)=>{let settled=false;let speakerStarted=false;const finish=(msg,err)=>{if(settled)return;settled=true;clearTimeout(watchdog);const url=meetingAdamAudioUrl;meetingAdamAudio=null;meetingAdamAudioUrl='';meetingAdamSpeechResolve=null;if(speakerStarted){speakerStarted=false;if(finalChunk)restartCleanMeetingCaptureAfterAdamSpeech();else meetingSpeakerOutputActive=true;}if(url)try{URL.revokeObjectURL(url);}catch(_){}if(err)reject(err);else resolve(msg);};meetingAdamSpeechResolve=(msg)=>finish(msg||'interrupted',null);meetingAdamAudio.onended=()=>finish('server voice chunk completed',null);meetingAdamAudio.onerror=()=>finish('',new Error('TTS playback failed'));const watchdog=setTimeout(()=>finish('',new Error('TTS playback timeout')),Math.max(15000,Math.min(45000,text.length*100)));meetingAdamAudio.play().then(()=>{meetingVoiceUnlocked=true;markAdamSpeakerPlaybackStart();speakerStarted=true;setMeetingVoiceStatus('speaking — part '+chunkIndex+' of '+chunkCount+' — speaker echo protected');}).catch(e=>finish('',e));});
+ }finally{clearTimeout(timeout);}
+}
+async function playMeetingBlobWithUnlockedAudioContext(blob){
+ if(!meetingVoiceUnlockContext)throw new Error('meeting audio context not primed');
+ try{if(meetingVoiceUnlockContext.state==='suspended')await meetingVoiceUnlockContext.resume();}catch(_){}
+ if(meetingVoiceUnlockContext.state!=='running')throw new Error('meeting audio context is not running');
+ const bytes=await blob.arrayBuffer();
+ const buffer=await meetingVoiceUnlockContext.decodeAudioData(bytes.slice(0));
+ return await new Promise((resolve,reject)=>{
+  try{
+   const source=meetingVoiceUnlockContext.createBufferSource();
+   const gain=meetingVoiceUnlockContext.createGain();gain.gain.value=1;
+   source.buffer=buffer;source.connect(gain);gain.connect(meetingVoiceUnlockContext.destination);
+   let done=false;const finish=(err)=>{if(done)return;done=true;meetingAdamAudioContextSource=null;err?reject(err):resolve();};
+   meetingAdamAudioContextSource=source;source.onended=()=>finish();source.start(0);
+  }catch(e){reject(e);}
+ });
+}
+async function speakAdamText(text,language){
+ const original=String(text||'').trim();meetingLastVoiceDeliveryOk=false;if(!original)return 'no voice text';
+ if(!meetingVoiceEnabled()){meetingAdamSpeaking=false;setMeetingVoiceStatus('automatic speech is OFF');return 'voice disabled';}
+ const clean=speechFriendlyMeetingText(original);if(!clean)return 'no voice text';
+ const locale=String(language||(/[\u0600-\u06ff]/.test(clean)?'ar-LB':'auto'));
+ meetingLastSpokenText=clean;meetingLastSpokenAt=Date.now();meetingAdamSpeaking=true;
+ const fastVoice=!!((document.getElementById('meetingFastVoice')||{}).checked);
+ const instantFactualVoice=!!((document.getElementById('meetingInstantFactualVoice')||{}).checked);
+ if(fastVoice&&instantFactualVoice&&meetingLatencyTrace.fastPath&&('speechSynthesis' in window)){
+  const instantJobId=++meetingVoiceJobSeq;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;setMeetingVoiceStatus('instant factual voice — starting device speech without server-TTS wait');
+  try{
+   await browserSpeakMeetingText(clean,locale,instantJobId,true);
+   meetingLastVoiceDeliveryOk=true;setMeetingVoiceStatus('voice completed — instant factual device voice');return 'voice completed';
+  }catch(instantVoiceErr){setMeetingVoiceStatus('instant device voice unavailable — using professional server voice');}
+  finally{meetingAdamSpeaking=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastSpokenAt=Date.now();}
+  meetingAdamSpeaking=true;
+ }
+ const voiceChunks=fastVoice?splitMeetingSpeechChunks(clean,MEETING_FAST_VOICE_CHUNK_CHARS):[clean];
+ if(fastVoice&&voiceChunks.length>1){
+  const jobId=++meetingVoiceJobSeq;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;setMeetingVoiceStatus('fast voice — preparing first short speech chunk');
+  try{
+   for(let i=0;i<voiceChunks.length;i++){
+    const chunk=voiceChunks[i],finalChunk=(i===voiceChunks.length-1);
+    try{await playServerMeetingChunk(chunk,locale,jobId,i+1,voiceChunks.length);}
+    catch(serverChunkErr){setMeetingVoiceStatus('server chunk unavailable — browser voice fallback');await browserSpeakMeetingText(chunk,locale,jobId,finalChunk);}
+   }
+   meetingLastVoiceDeliveryOk=true;setMeetingVoiceStatus('voice completed — fast chunked playback');return 'voice completed';
+  }finally{meetingAdamSpeaking=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastSpokenAt=Date.now();}
+ }
+ meetingSpeakerOutputActive=true;meetingRecorderContainsAdamAudio=true;setMeetingVoiceStatus('preparing automatic meeting voice');
+ try{
+  const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:clean,language:locale})});
+  if(!r.ok)throw new Error('tts unavailable');
+  const blob=await r.blob();if(!blob||!blob.size)throw new Error('empty tts audio');
+  try{
+   setMeetingVoiceStatus('speaking — unlocked meeting audio context');markAdamSpeakerPlaybackStart();
+   await playMeetingBlobWithUnlockedAudioContext(blob);restartCleanMeetingCaptureAfterAdamSpeech();
+   meetingLastVoiceDeliveryOk=true;setMeetingVoiceStatus('voice completed — ready for next participant turn');return 'voice completed';
+  }catch(contextErr){setMeetingVoiceStatus('audio-context playback unavailable — trying HTML audio');}
+  const url=URL.createObjectURL(blob);const audio=new Audio(url);meetingAdamAudio=audio;meetingAdamAudioUrl=url;audio.preload='auto';audio.volume=1;audio.muted=false;
+  await new Promise((resolve,reject)=>{let finished=false;const done=(err)=>{if(finished)return;finished=true;meetingAdamAudio=null;meetingAdamAudioUrl='';try{URL.revokeObjectURL(url);}catch(_){}restartCleanMeetingCaptureAfterAdamSpeech();err?reject(err):resolve();};audio.onended=()=>done();audio.onerror=()=>done(new Error('audio playback failed'));audio.play().then(()=>{meetingVoiceUnlocked=true;markAdamSpeakerPlaybackStart();}).catch(done);});
+  meetingLastVoiceDeliveryOk=true;setMeetingVoiceStatus('voice completed — HTML audio fallback');return 'voice completed';
+ }catch(serverErr){
+  if('speechSynthesis' in window){
+   try{setMeetingVoiceStatus('server audio unavailable — speaking with browser voice');await browserSpeakMeetingText(clean,locale,meetingVoiceJobSeq,true);meetingLastVoiceDeliveryOk=true;setMeetingVoiceStatus('voice completed — browser fallback');return 'voice completed';}
+   catch(browserErr){setMeetingVoiceStatus('audio unavailable — all three playback paths failed');throw browserErr;}
+  }
+  setMeetingVoiceStatus('audio unavailable — server voice failed and browser voice unavailable');throw serverErr;
+ }finally{meetingAdamSpeaking=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastSpokenAt=Date.now();}
+}
+async function runInteractiveConversation(question,options={}){
+ const status=document.getElementById('conversationStatus');
+ if(modeEl.value!=='active_participant'&&modeEl.value!=='owner_representative'){status.textContent='Conversation: Active Participant or Owner Representative mode required';return false;}
+ const representativeMode=modeEl.value==='owner_representative';
+ const representativeApproved=representativeMode && approved();
+ const activeParticipantApproved=!representativeMode && document.getElementById('conversationApproved').checked;
+ const sessionApproved=representativeApproved||activeParticipantApproved;
+ if(representativeMode&&!representativeApproved){status.textContent='Conversation: owner representative approval required';return false;}
+ if(!representativeMode&&!activeParticipantApproved){status.textContent='Conversation: owner session approval required';return false;}
+ question=(question||'').trim();if(!question){status.textContent='Conversation: enter or say a question for Adam';return false;}
+ const attempt=Number(options.attempt||0),questionId=String(options.questionId||newMeetingQuestionId());
+ const turnKind=String(options.turnKind||meetingConversationTurnKind(question));
+ const clarificationFollowup=meetingAwaitingClarification&&likelyClarificationReply(question);
+ const directQuestion=(typeof options.directQuestion==='boolean')?options.directQuestion:likelyDirectQuestion(question);
+ const responseRequired=(typeof options.responseRequired==='boolean')?options.responseRequired:(directQuestion||clarificationFollowup||turnKind==='correction'||turnKind==='order'||turnKind==='addressed_comment');
+ const sessionIdAtDispatch=meetingConversationSessionId;const sessionEpochAtDispatch=meetingSessionEpoch;
+ status.textContent=attempt?'Conversation: retrying the participant interaction…':'Conversation: Adam is thinking…';
+ const context=transcript.value.slice(-6000);
+ let r,j;
+ setMeetingReplyTrace(3,'waiting for AI provider',questionId);meetingLatencyTrace.aiStartAt=Date.now();renderMeetingLatencyTrace();
+ let providerWatchdog=null;const providerController=(typeof AbortController!=='undefined')?new AbortController():null;
+ try{
+  if(providerController)providerWatchdog=setTimeout(()=>providerController.abort(),30000);
+  r=await fetch('/api/personal-assistant/meeting-conversation/ask',{method:'POST',headers:{'Content-Type':'application/json'},signal:providerController?providerController.signal:undefined,body:JSON.stringify({question,question_id:questionId,direct_question:directQuestion,turn_kind:turnKind,response_required:responseRequired,clarification_followup:clarificationFollowup,clarification_parent_question_id:meetingClarificationQuestionId,meeting_context:context,messages:meetingConversationHistory.slice(-10),client_history_session_id:meetingConversationHistorySessionId,session_id:sessionIdAtDispatch,owner_approved:sessionApproved,representative_mode:representativeMode,owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',authority_profile:(document.getElementById('authorityProfile')||{}).value||'',professional_scope:(document.getElementById('professionalScope')||{}).value||'auto',participation_style:(document.getElementById('participationStyle')||{}).value||'balanced',proactive_reason:proactiveInterventionReason(question),meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',focus_locked:meetingFocusLocked(),focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',continuity_memory:document.getElementById('meetingContinuityMemory').checked,language:document.getElementById('meetingLanguage').value})});
+  j=await r.json().catch(()=>({}));meetingLatencyTrace.aiEndAt=Date.now();meetingLatencyTrace.providerMs=Number(j&&j.provider_elapsed_ms||0);meetingLatencyTrace.fastPath=!!(j&&j.latency_fast_path);renderMeetingLatencyTrace();
+ }catch(e){meetingLatencyTrace.aiEndAt=Date.now();renderMeetingLatencyTrace();const aborted=!!(e&&e.name==='AbortError');j={status:aborted?'client_ai_provider_timeout':'meeting_ai_request_failed',error:String(e&&e.message||e)};r={ok:false};}
+ finally{if(providerWatchdog)clearTimeout(providerWatchdog);}
+ if(sessionIdAtDispatch!==meetingConversationSessionId||sessionEpochAtDispatch!==meetingSessionEpoch){status.textContent='Conversation: stale prior-meeting response ignored';return false;}
+ if(j&&j.session_id&&String(j.session_id)!==sessionIdAtDispatch){status.textContent='Conversation: mismatched meeting-session response ignored';return false;}
+ if(j&&j.question_coverage)renderQuestionCoverage(j.question_coverage);
+ if(!r.ok){
+  if(j&&j.duplicate_suppressed){status.textContent='Conversation: duplicate participant turn suppressed — waiting for the original Adam response';return true;}
+  if(j&&(j.status==='ai_provider_timeout'||j.status==='client_ai_provider_timeout')){setMeetingReplyTrace(4,'AI provider timeout — question retained',questionId);status.textContent='Conversation: AI provider timed out — question retained. Open AI Settings and run Test AI Connection before repeating it.';document.getElementById('out').textContent='AI provider timeout. The accepted meeting question was retained; no duplicate was created.';return false;}
+  if(j&&j.status==='ai_provider_error'){setMeetingReplyTrace(4,'AI provider error — question retained',questionId);status.textContent='Conversation: AI provider error — question retained. Open AI Settings and run Test AI Connection.';document.getElementById('out').textContent='AI provider error: '+String(j.error||'unknown provider error');return false;}
+  if(representativeMode&&responseRequired&&attempt<1&&j&&j.status!=='meeting_ai_request_failed'){status.textContent='Conversation: temporary response failure — Adam is retrying once…';await sleepMeeting(900);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired});}
+  setMeetingReplyTrace(4,'AI request failed — question retained',questionId);
+  status.textContent='Conversation: AI request failed — running provider diagnostic…';
+  try{
+   const dr=await fetch('/api/ai-test',{method:'POST',headers:{'Content-Type':'application/json'}});
+   const dj=await dr.json().catch(()=>({}));
+   if(dr.ok&&dj.ok){
+    status.textContent='Conversation: provider test passed; the failure is in the meeting server path, not the provider configuration. The question is retained.';
+    document.getElementById('out').textContent='Meeting server-path request failed while the AI provider test passed. The question is retained. Version: {{ version }}';
+   }else{
+    const de=String(dj.error||'provider diagnostic failed').slice(0,600);
+    status.textContent='Conversation: AI provider diagnostic failed — '+de;
+    document.getElementById('out').textContent='AI provider diagnostic: '+de+' — Open AI Settings, correct the item, click Test Connection, then retry the retained question.';
+   }
+  }catch(diagErr){
+   status.textContent='Conversation: AI request failed and diagnostic could not run — '+String(diagErr&&diagErr.message||diagErr);
+  }
+  return false;
+ }
+ if(j.attention_hold){armMeetingAddressHold(j.question_preamble?'Question preamble heard':'Adam heard his name');return true;}
+ if(j.project_mismatch_filtered){status.textContent='Conversation: explicit other-project speech filtered — no answer and no meeting-memory entry';return true;}
+ const answer=(j.reply||'').toString().trim();
+ if(j.ignore_requested){
+  if(responseRequired&&attempt<1){status.textContent='Conversation: interaction was not resolved — Adam is retrying once…';await sleepMeeting(500);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired:true});}
+  status.textContent='Conversation: non-question/background fragment ignored — listening';return true;
+ }
+ if(!answer){
+  if(representativeMode&&responseRequired&&attempt<1){status.textContent='Conversation: empty response — Adam is retrying once…';await sleepMeeting(700);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired});}
+  status.textContent=responseRequired?'Conversation: interaction retained but no reply was produced':'Conversation: no reply required';return false;
+ }
+ setMeetingReplyTrace(4,'AI response received',String(j.question_id||questionId));
+ const clarificationRequested=!!j.clarification_requested;
+ meetingAwaitingClarification=clarificationRequested;
+ meetingClarificationPrompt=clarificationRequested?answer:'';
+ meetingClarificationAt=clarificationRequested?Date.now():0;
+ meetingClarificationQuestionId=clarificationRequested?String(j.question_id||questionId):'';
+ const replyLocale=(j.reply_tts_locale||'en-US').toString();
+ const identityIntro=replyLocale==='ar-LB'?'أنا آدم، ممثل محمد بالذكاء الاصطناعي. ':"I am Adam, Mohamad's AI meeting representative. ";
+ const spoken=meetingIdentityDeclared?answer:(identityIntro+answer);
+ meetingIdentityDeclared=true;
+ document.getElementById('responseDraft').value=spoken;
+ rememberAdamVisibleReply(spoken,clarificationRequested);
+ rememberDiscussionRecord(question,answer,j.discussion_topic,j.discussion_status,!!j.followup_bound_to_immediate_thread,j.register_type,j.register_state,!!j.owner_approval_required,!!j.action_candidate,!!j.risk_flag,j.action_origin,questionId);
+ meetingConversationHistory.push({role:'user',content:question},{role:'assistant',content:answer});
+ status.textContent=clarificationRequested?'Conversation: Adam is asking the participant to clarify…':'Conversation: speaking in '+(j.reply_language||'English')+'…';
+ try{
+  const v=await speakAdamText(spoken,replyLocale);
+  setMeetingReplyTrace(5,'spoken reply completed',String(j.question_id||questionId));
+  status.textContent=clarificationRequested?'Conversation: clarification requested — listening for the participant to clarify':'Conversation: '+v+' — '+(j.reply_language||'English')+' — ready for follow-up';
+ }catch(e){setMeetingReplyTrace(5,'reply recorded — audio unavailable',String(j.question_id||questionId));status.textContent=clarificationRequested?'Conversation: clarification ready; audio unavailable — use Test / Enable Meeting Voice':'Conversation: response ready; audio unavailable — use Test / Enable Meeting Voice';setMeetingVoiceStatus('reply text is ready but playback failed — click Test / Enable Meeting Voice and verify speaker output');}
+ return true;
+}
+document.getElementById('generateReport').onclick=async()=>{
+ const box=document.getElementById('meetingReport');box.value='Generating professional meeting report...';
+ try{
+  const r=await fetch('/api/personal-assistant/meeting-conversation/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId,owner_approved:approved(),meeting_title:document.getElementById('meetingTitle').value,project_reference:document.getElementById('projectReference').value,participants:document.getElementById('meetingParticipants').value,meeting_datetime:document.getElementById('meetingDateTime').value})});
+  const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.status||'meeting_report_failed');box.value=j.report||'';
+  document.getElementById('out').textContent='Meeting report ready from '+String(j.discussion_record_count||0)+' paired discussion records. Direct-question coverage: '+String(j.answered_question_count||0)+' answered / '+String(j.direct_question_count||0)+'; '+String(j.processing_question_count||0)+' processing; '+String(j.unanswered_question_count||0)+' unanswered.';
+ }catch(e){box.value='Report generation failed: '+String(e&&e.message||e);}
+};
+document.getElementById('downloadReport').onclick=async()=>{
+ const report=document.getElementById('meetingReport').value.trim();if(!report){alert('Generate the meeting report first.');return;}
+ try{
+  const r=await fetch('/api/personal-assistant/meeting-conversation/report.docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner_approved:approved(),report,meeting_title:document.getElementById('meetingTitle').value,project_reference:document.getElementById('projectReference').value,participants:document.getElementById('meetingParticipants').value,meeting_datetime:document.getElementById('meetingDateTime').value})});
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.status||'docx_download_failed');}
+  const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;const cd=r.headers.get('Content-Disposition')||'';const mm=cd.match(/filename=\"?([^\";]+)\"?/i);a.download=mm?mm[1]:'Adam_Meeting_Report.docx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }catch(e){alert('Word report download failed: '+String(e&&e.message||e));}
+};
+document.getElementById('printReport').onclick=()=>{
+ const report=document.getElementById('meetingReport').value.trim();if(!report){alert('Generate the meeting report first.');return;}
+ const w=window.open('','_blank');if(!w)return;w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Adam Meeting Report</title><style>body{font-family:Arial,sans-serif;margin:32px}pre{white-space:pre-wrap;font-family:Arial,sans-serif}</style></head><body><h1>Adam — Meeting Report</h1><pre>'+escapeReportHtml(report)+'</pre></body></html>');w.document.close();w.focus();setTimeout(()=>w.print(),250);
+};
+document.getElementById('universalAsk').onclick=runUniversalAssistant;
+document.getElementById('universalNewTask').onclick=()=>{universalAssistantHistory=[];document.getElementById('universalInput').value='';document.getElementById('universalReply').value='';document.getElementById('universalHistory').value='';document.getElementById('universalAction').value='';document.getElementById('universalTaskFocus').value='';try{localStorage.removeItem(UNIVERSAL_HISTORY_KEY);localStorage.removeItem(UNIVERSAL_FOCUS_KEY);}catch(_){}document.getElementById('universalStatus').textContent='Universal Assistant: new task started — current thread cleared; durable explicit corrections remain available when relevant';};
+document.getElementById('universalInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();runUniversalAssistant();}});
+try{const f=document.getElementById('universalTaskFocus');if(f){f.value=localStorage.getItem(UNIVERSAL_FOCUS_KEY)||'';f.addEventListener('change',saveUniversalTaskState);f.addEventListener('blur',saveUniversalTaskState);}renderUniversalHistory();}catch(_){renderUniversalHistory();}
+document.getElementById('universalVoice').onclick=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){document.getElementById('universalStatus').textContent='Universal Assistant: browser voice recognition is unavailable — type the request instead';return;}if(universalRecognition){try{universalRecognition.stop();}catch(_){}universalRecognition=null;return;}const rec=new SR();universalRecognition=rec;rec.lang='en-US';rec.interimResults=true;rec.continuous=false;rec.onstart=()=>document.getElementById('universalStatus').textContent='Universal Assistant: listening…';rec.onresult=e=>{let final='',interim='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)final+=t;else interim+=t;}document.getElementById('universalInput').value=(final||interim).trim();if(final.trim()){setTimeout(runUniversalAssistant,250);}};rec.onerror=()=>{document.getElementById('universalStatus').textContent='Universal Assistant: voice capture failed — type the request instead';universalRecognition=null;};rec.onend=()=>{universalRecognition=null;};rec.start();};
+document.getElementById('testMeetingVoice').onclick=async()=>{primeMeetingVoice();try{const locale=document.getElementById('meetingLanguage').value==='ar-LB'?'ar-LB':'en-US';const sample=locale==='ar-LB'?'آدم جاهز للصوت في الاجتماع.':'Adam meeting voice is ready.';await speakAdamText(sample,locale);}catch(_){}};
+document.getElementById('sendMeetingTextQuery').onclick=sendTypedMeetingQuery;
+document.getElementById('meetingTextQuery').addEventListener('keydown',(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendTypedMeetingQuery();}});
+document.getElementById('askAdam').onclick=()=>{primeMeetingVoice();return runInteractiveConversation(document.getElementById('conversationInput').value);};
+let meetingIdentityDeclared=false;document.getElementById('authorizeSpeak').onclick=async()=>{const body={response:document.getElementById('responseDraft').value,owner_approved:document.getElementById('speakApproved').checked,identity_already_declared:meetingIdentityDeclared};const r=await fetch('/api/personal-assistant/meeting-conversation/authorize-speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!j.speak_authorized){document.getElementById('speakStatus').textContent='Speaking: '+j.status;return;}document.getElementById('responseDraft').value=j.response;meetingIdentityDeclared=true;document.getElementById('speakStatus').textContent='Speaking: authorized';try{const a=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:j.response,language:(/[\u0600-\u06ff]/.test(j.response)?'ar-LB':'auto')})});if(!a.ok)throw new Error('TTS unavailable');const blob=await a.blob();const url=URL.createObjectURL(blob);const audio=new Audio(url);audio.onended=()=>URL.revokeObjectURL(url);await audio.play();document.getElementById('speakStatus').textContent='Speaking: completed';}catch(e){if('speechSynthesis' in window){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(j.response);speechSynthesis.speak(u);document.getElementById('speakStatus').textContent='Speaking: browser voice fallback';}else document.getElementById('speakStatus').textContent='Speaking authorized; audio unavailable';}};
+</script></body></html>

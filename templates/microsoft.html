@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Microsoft Outlook Connection</title>
+<style>
+body{font-family:Arial;background:#f3f4f6;margin:0;color:#111827}.wrap{max-width:820px;margin:25px auto;padding:14px}
+.card{background:white;padding:18px;border-radius:14px;margin:12px 0}.small{font-size:13px;color:#6b7280}
+input{width:100%;box-sizing:border-box;padding:10px;font:inherit}button,a{padding:10px 13px;border:1px solid #bbb;border-radius:8px;background:white;color:#111827;text-decoration:none;cursor:pointer}
+.primary{background:#111827;color:white}.code{font-size:28px;font-weight:bold;letter-spacing:3px;padding:12px;background:#f9fafb;border-radius:10px;text-align:center}.ok{color:#067647}.warn{color:#b54708}
+</style></head><body><div class="wrap">
+<div class="card"><h1>Microsoft Outlook Connection</h1><a href="/">← Back</a>
+<p>Status: <b id="status" class="{{ 'ok' if status.status=='connected' else 'warn' }}">{{ status.status }}</b></p>
+</div>
+<div class="card"><h2>Step 1 — Application (client) ID</h2>
+<p class="small">This is required by Microsoft for a standalone application. You may also set MICROSOFT_CLIENT_ID in .env.</p>
+<input id="clientId" value="{{ client_id }}" placeholder="Microsoft Application (client) ID"><br><br>
+<button class="primary" id="save">Save Client ID</button><span id="saveMsg" class="small"></span>
+</div>
+<div class="card"><h2>Step 2 — Sign in</h2>
+<button class="primary" id="start">Start Device Sign-In</button>
+<div id="flow" style="display:none">
+<p>Open: <a id="verify" target="_blank" rel="noopener"></a></p>
+<p>Enter this code:</p><div id="code" class="code"></div><p id="message" class="small"></p>
+</div><p id="flowMsg" class="small"></p></div>
+<div class="card"><button id="disconnect">Disconnect Microsoft</button></div>
+</div>
+<script>
+const qs=x=>document.getElementById(x); let poll=null;
+qs('save').onclick=async()=>{let r=await fetch('/api/microsoft/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:qs('clientId').value})});let d=await r.json();qs('saveMsg').textContent=d.ok?'Saved.':'Error: '+d.error}
+qs('start').onclick=async()=>{let r=await fetch('/api/microsoft/start',{method:'POST'});let d=await r.json();if(!d.ok){qs('flowMsg').textContent='Error: '+d.error;return}qs('flow').style.display='block';qs('verify').href=d.verification_uri;qs('verify').textContent=d.verification_uri;qs('code').textContent=d.user_code;qs('message').textContent=d.message||'';qs('flowMsg').textContent='Waiting for Microsoft approval…';if(poll)clearInterval(poll);poll=setInterval(check,2500)}
+async function check(){let d=await (await fetch('/api/microsoft/status')).json();if(d.status==='connected'){qs('status').textContent='connected';qs('status').className='ok';qs('flowMsg').textContent='Connected successfully.';clearInterval(poll)}else if(d.status==='error'){qs('flowMsg').textContent='Error: '+d.error;clearInterval(poll)}}
+qs('disconnect').onclick=async()=>{await fetch('/api/microsoft/disconnect',{method:'POST'});location.reload()}
+</script></body></html>

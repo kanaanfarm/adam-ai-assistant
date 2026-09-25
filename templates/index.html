@@ -1,0 +1,1211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/app-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/static/app-icon.svg">
+<title>{{ app_name }} {{ version }}</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#111827;background:#f3f4f6}*{box-sizing:border-box}body{margin:0}
+.app{min-height:100vh;display:grid;grid-template-columns:240px 1fr}aside{background:#111827;color:white;padding:18px 12px}
+aside h1{font-size:19px;margin:0 0 20px}.module{display:block;color:white;text-decoration:none;padding:11px 12px;border-radius:8px;margin:4px 0;cursor:pointer}.module:hover,.module.active{background:#374151}
+main{display:flex;flex-direction:column;min-width:0}header{background:white;padding:14px 18px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.ok{color:#067647}.warn{color:#b54708}.chat{flex:1;overflow:auto;padding:20px}.msg{max-width:850px;padding:12px 14px;border-radius:12px;margin:8px auto;white-space:pre-wrap;line-height:1.45}.user{background:#dbeafe}.assistant{background:white;border:1px solid #e5e7eb}
+.waReview{max-width:850px;margin:8px auto;padding:16px;background:#fff;border:2px solid #25d366;border-radius:12px}.waGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.waReview label{display:block;font-weight:700;margin:8px 0 4px}.waReview input,.waReview textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px}.waReview textarea{min-height:100px;resize:vertical}.waApprove{display:flex;align-items:center;gap:8px;margin:12px 0}.waApprove input{width:auto}.waStatus{font-weight:700;margin-top:10px}.waSend{background:#075e54;color:#fff;border:0;border-radius:8px;padding:11px 15px;font-weight:700}.waSend:disabled{opacity:.55}@media(max-width:650px){.waGrid{grid-template-columns:1fr}}
+
+.attachmentBar{max-width:900px;margin:0 auto 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.attachBtn{display:inline-flex;align-items:center;gap:6px;padding:9px 11px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:700;cursor:pointer}
+.attachBtn input{display:none}
+.attachmentPreview{max-width:900px;margin:0 auto 8px;display:flex;gap:8px;flex-wrap:wrap}
+.attachmentChip{display:flex;align-items:center;gap:8px;max-width:280px;padding:7px 9px;border:1px solid #d1d5db;border-radius:10px;background:#f8fafc;font-size:12px}
+.attachmentChip img{width:42px;height:42px;object-fit:cover;border-radius:7px;border:1px solid #ddd}
+.attachmentChip .fileText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.attachmentRemove{border:0;background:transparent;padding:2px 5px;font-size:16px;color:#b42318}
+.dropActive{outline:3px dashed #2563eb;outline-offset:-8px;background:#eff6ff!important}
+.attachmentHint{max-width:900px;margin:0 auto 5px;font-size:11px;color:#6b7280}
+
+.composer{background:white;border-top:1px solid #ddd;padding:12px}.tools,.inputrow{max-width:900px;margin:0 auto 8px;display:flex;gap:8px;flex-wrap:wrap}
+select,button,input{font:inherit}select,button{padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:white}button{cursor:pointer}.primary{background:#111827;color:white;border-color:#111827}
+input{flex:1;padding:12px 14px;border:1px solid #bbb;border-radius:10px;min-width:180px}
+.state{max-width:900px;margin:0 auto 8px;padding:9px 12px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;font-weight:600}
+.small{font-size:12px;color:#6b7280}.micActive{background:#fee2e2!important;border-color:#ef4444!important}
+.stockDash{max-width:900px;margin:10px auto 0;background:#fff;border:1px solid #d1d5db;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.stockDashTop{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}.stockTitle{font-weight:900;font-size:16px}.stockMeta{font-size:12px;color:#6b7280}.stockHeadline{font-weight:800;margin:10px 0;padding:10px;border-radius:9px;background:#f8fafc}.stockMetrics{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:9px 0}.stockMetric{border:1px solid #e5e7eb;border-radius:9px;padding:8px;background:#fff}.stockMetric span{display:block;font-size:10px;color:#6b7280}.stockMetric b{display:block;font-size:14px;margin-top:2px}.stockPanels{display:grid;grid-template-columns:1.15fr 1fr;gap:9px}.stockPanel{border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fafafa}.stockPanelTitle{font-size:12px;font-weight:800;margin-bottom:7px}.stockAdvice{display:grid;gap:6px}.stockChip{border:1px solid #e5e7eb;border-radius:8px;padding:7px 8px;background:#fff;font-size:11px;line-height:1.35}.stockChip b{margin-right:5px}.stockBuy{color:#067647}.stockSell{color:#b42318}.stockHold{color:#b54708}.stockWait{color:#175cd3}.stockRefresh{padding:7px 10px;font-size:12px}.stockLink{font-size:12px;color:#111827;font-weight:700}.stockError{color:#b42318;font-size:12px}.stockRegime{font-weight:800}.stockPositive{color:#067647}.stockNegative{color:#b42318}.stockNeutral{color:#b54708}.stockTable{width:100%;border-collapse:collapse}.stockTable th,.stockTable td{font-size:10px;padding:5px 3px;border-bottom:1px solid #e5e7eb;text-align:left}.stockTable th{color:#6b7280}.stockFooter{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px}.stockUrgent{animation:stockPulse 1.3s ease-in-out infinite}@keyframes stockPulse{0%,100%{box-shadow:0 0 0 0 rgba(180,35,24,0)}50%{box-shadow:0 0 0 3px rgba(180,35,24,.12)}}@media(max-width:800px){.stockMetrics{grid-template-columns:repeat(3,1fr)}.stockPanels{grid-template-columns:1fr}}
+.menuBtn{display:none;padding:8px 11px;font-size:20px}
+.navOverlay{display:none}
+@media(max-width:780px){
+ body{overflow:hidden}
+ .app{display:block;min-height:100dvh}
+ main{height:100dvh;width:100%;display:flex}
+ aside{display:block;position:fixed;z-index:20;left:0;top:0;bottom:0;width:min(82vw,300px);
+       transform:translateX(-105%);transition:transform .2s ease;box-shadow:8px 0 25px rgba(0,0,0,.2)}
+ aside.open{transform:translateX(0)}
+ .navOverlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:19}
+ .navOverlay.open{display:block}
+ .menuBtn{display:inline-block}
+ header{flex:0 0 auto;position:relative;z-index:2;padding:10px;justify-content:flex-start}
+ header>div:last-child{margin-left:auto;font-size:12px}
+ .chat{flex:1;min-height:0;padding:10px;overflow-y:auto}
+ .msg{margin:7px 0;max-width:100%}
+ .composer{flex:0 0 auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));}
+ .tools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+ .tools select,.tools button,.tools a,.tools a button{width:100%;min-width:0}
+ .inputrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-bottom:4px}
+ .inputrow input{width:100%;min-width:0}
+ .state{margin-bottom:6px;padding:7px 9px}
+ .composer>.small{font-size:10px}
+}
+
+.cameraModal[hidden]{display:none!important}.cameraModal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:14px}
+.cameraPanel{width:min(720px,96vw);background:#fff;border-radius:16px;padding:14px;box-shadow:0 18px 60px rgba(0,0,0,.35)}
+.cameraTop{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.cameraTop button{padding:6px 10px}
+#adamCameraVideo,#adamCameraPhoto{display:block;width:100%;max-height:68vh;object-fit:contain;background:#111;border-radius:12px}
+.cameraActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.cameraActions button{flex:1;min-width:120px}
+.attachBtn{font:inherit}
+
+#adamCameraVideo,#adamCameraPhoto{transform:scaleX(-1)!important;-webkit-transform:scaleX(-1)!important;}
+</style>
+
+<style id="adam-opportunities-style">
+.adam-opportunities{margin-top:14px;border:1px solid #dfe5ec;border-radius:12px;background:#fff;padding:12px}
+.adam-opportunities h3{margin:0 0 10px;font-size:16px}
+.opp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.opp-card{border:1px solid #e4e8ee;border-radius:10px;padding:10px;background:#fbfcfd}
+.opp-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.opp-symbol{font-weight:800;font-size:16px}
+.opp-action{font-weight:800}
+.opp-buy{color:#067647}.opp-wait{color:#b54708}.opp-sell{color:#b42318}.opp-hold{color:#175cd3}
+.opp-meta{font-size:12px;color:#667085;margin-top:6px;line-height:1.45}
+.opp-reason{font-size:12px;color:#344054;margin-top:7px}
+@media(max-width:900px){.opp-grid{grid-template-columns:1fr}}
+</style>
+
+<style id="adam-stock-alert-style">
+.stock-alert-panel{margin-top:14px;border:1px solid #d0d5dd;border-radius:12px;background:#fff;padding:12px}
+.stock-alert-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+.stock-alert-title{font-size:16px;font-weight:800}
+.stock-alert-list{display:flex;flex-direction:column;gap:8px}
+.stock-alert{border-radius:9px;padding:10px 12px;border:1px solid #eaecf0;font-size:13px;line-height:1.45}
+.stock-alert-buy{background:#ecfdf3;border-color:#abefc6;color:#067647}
+.stock-alert-sell{background:#fef3f2;border-color:#fecdca;color:#b42318}
+.stock-alert-none{background:#f9fafb;color:#667085}
+</style>
+<style id="adam-stock-ui-v0696">
+/* v0.8.0.1 - wider, clearer stock command center */
+body{overflow-x:hidden}
+#stockCommandCenter,
+.stock-command-center,
+.adam-stock-command-center{
+  width:min(1180px,calc(100vw - 290px));
+  max-width:1180px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.stock-alert-panel,
+.adam-opportunities{
+  width:min(1500px,calc(100vw - 250px));
+  max-width:1500px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.stock-alert-panel{padding:16px}
+.stock-alert-title{font-size:18px}
+.stock-alert{font-size:14px;padding:12px 14px}
+.adam-opportunities{padding:14px 16px}
+.adam-opportunities h3{font-size:18px}
+.opp-grid{grid-template-columns:repeat(3,minmax(260px,1fr));gap:12px}
+.opp-card{padding:13px 14px}
+.opp-symbol{font-size:17px}
+.opp-action{font-size:15px}
+.opp-meta,.opp-reason{font-size:13px;line-height:1.55}
+
+/* Improve the upper stock card regardless of exact wrapper class */
+main .card:has(h1),
+main .card:has(h2),
+main .card:has(h3){font-size:14px}
+
+/* Main Stock Command Center text */
+[id*="stock"] table,
+[id*="Stock"] table{font-size:13px}
+[id*="stock"] th,[id*="stock"] td,
+[id*="Stock"] th,[id*="Stock"] td{padding:7px 8px}
+
+/* Give dashboard more breathing room on large screens */
+@media(min-width:1200px){
+  .content,.main-content,main{
+    padding-left:18px !important;
+    padding-right:18px !important;
+  }
+}
+@media(max-width:1100px){
+  #stockCommandCenter,
+  .stock-command-center,
+  .adam-stock-command-center,
+  .stock-alert-panel,
+  .adam-opportunities{
+    width:calc(100vw - 210px);
+  }
+  .opp-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:760px){
+  #stockCommandCenter,
+  .stock-command-center,
+  .adam-stock-command-center,
+  .stock-alert-panel,
+  .adam-opportunities{
+    width:calc(100vw - 24px);
+  }
+  .opp-grid{grid-template-columns:1fr}
+}
+</style>
+<style id="adam-email-review-style">
+.emailReview{border:1px solid #b9c8da;background:#f8fbff;border-radius:12px;padding:14px;margin:10px 0;max-width:980px}
+.emailReview>strong{display:block;font-size:16px;margin-bottom:10px}
+.emailGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.emailReview label{display:block;font-size:12px;font-weight:700;margin:7px 0 4px;color:#344054}
+.emailReview input,.emailReview textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:7px;padding:9px;font:inherit}
+.emailReview textarea{min-height:170px;resize:vertical}
+.emailApprove{display:flex!important;gap:8px;align-items:center;margin-top:10px!important;font-size:13px!important}
+.emailApprove input{width:auto!important}
+.emailSend{margin-top:10px;background:#0f4c81;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}
+.emailSend:disabled{opacity:.5;cursor:not-allowed}
+.emailStatus{margin-top:8px;font-size:13px}.emailStatus.ok{color:#067647}.emailStatus.warn{color:#b42318}
+@media(max-width:760px){.emailGrid{grid-template-columns:1fr}}
+</style>
+<style id="adam-main-stock-separation-v06915">
+#stockDash{display:none!important}
+#chat > .stock-alert-panel,
+#chat > .adam-opportunities{display:none!important}
+
+#adamMainStockCompact{
+  max-width:900px;margin:12px auto 10px;padding:12px 14px;
+  border:1px solid #d0d5dd;border-radius:12px;background:#fff;
+  box-shadow:0 1px 2px rgba(16,24,40,.05);box-sizing:border-box
+}
+.adam-main-stock-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px
+}
+#adamMainMarketBadge{
+  display:inline-block;margin-left:6px;padding:3px 8px;border-radius:999px;
+  background:#f2f4f7;font-size:12px
+}
+.adam-stock-open-btn{
+  display:inline-block;padding:7px 10px;border:1px solid #98a2b3;
+  border-radius:8px;text-decoration:none
+}
+#adamMainStockLine{font-size:13px;margin-bottom:4px}
+#adamMainStockAlertLine{font-size:13px;font-weight:600}
+.adam-stock-popup{
+  position:fixed;right:18px;bottom:18px;z-index:99999;max-width:420px;
+  padding:14px 16px;border-radius:12px;background:#101828;color:#fff;
+  box-shadow:0 8px 24px rgba(16,24,40,.25);display:none
+}
+.adam-stock-popup.show{display:block}
+@media(max-width:700px){
+  #adamMainStockCompact{margin:8px}
+}
+</style>
+
+</head>
+<body>
+<div id="navOverlay" class="navOverlay"></div><div class="app">
+<aside>
+<h1>{{ app_name }}</h1>
+<a class="module active" href="/">Assistant</a>
+<a class="module" href="/email">Email</a>
+<a class="module" href="/inbox">Inbox AI</a>
+<a class="module" href="/followups">Follow-Ups</a>
+<a class="module" href="/acquisition">Acquisition Center</a>
+<a class="module" href="/microsoft">Microsoft Outlook</a>
+<a class="module" href="/contacts">Contacts</a><a class="module" href="/calendar">Calendar</a><a class="module" href="/translator">Translator</a><a class="module" href="/sales">Sales</a><a class="module" href="/documents">Documents</a><a class="module" href="/calling-invitations">Calling & Invitations</a>
+<a class="module" href="/meeting-attendance">Meeting Attendance / Representative</a><a class="module" href="/autonomous-meeting-attendance">Autonomous Meeting Attendance</a><a class="module" href="/cross-app-personal-operator">Cross-App Operator</a><a class="module" href="/production-reliability">Production Reliability</a><a class="module" href="/security-privacy-certification">Security & Privacy</a><a class="module" href="/commercial-buyer-demo-certification">Buyer Demo</a><a class="module" href="/production-commercial-release">Final Release</a>
+<a class="module" href="/guest-voice">Guest Voice</a>
+<a class="module" href="/whatsapp">WhatsApp</a><a class="module" href="/voice-studio">Voice Studio</a><a class="module" href="/stock">Stock</a><a class="module" href="/owner-control">Owner Control</a>
+<a class="module" href="/ai-settings">AI Settings</a>
+<a class="module" href="/mobile-setup">Install on Phone</a>
+</aside>
+<main>
+<header><button id="menuBtn" class="menuBtn" aria-label="Menu">☰</button><div><strong>{{ app_name }} {{ version }}</strong><div class="small">Voice conversation build</div></div>
+<div class="{% if provider_ready %}ok{% else %}warn{% endif %}">{% if provider_ready %}AI connected{% else %}AI provider not configured{% endif %}</div></header>
+<div id="stockDash" class="stockDash">
+<div class="stockDashTop"><div class="adam-stock-command-center"><span class="stockTitle">📈 Adam Stock Command Center</span> <span id="stockMarket" class="stockMeta">Checking…</span></div><div><button id="stockRefresh" class="stockRefresh">CHECK MARKET NOW</button> <a class="stockLink" href="/stock">Open Full Stock</a></div></div>
+<div id="stockHeadline" class="stockHeadline">Adam is checking market status, portfolio and trade signals…</div>
+<div class="stockMetrics">
+<div class="stockMetric"><span>Market</span><b id="stockRegime">—</b></div><div class="stockMetric"><span>Portfolio</span><b id="stockPortfolio">—</b></div><div class="stockMetric"><span>Cash</span><b id="stockCash">—</b></div><div class="stockMetric"><span>Invested</span><b id="stockInvested">—</b></div><div class="stockMetric"><span>Portfolio Today P/L</span><b id="stockTodayPL">—</b></div><div class="stockMetric"><span>Open Position P/L</span><b id="stockTotalPL">—</b></div>
+</div>
+<div class="stockPanels"><div class="stockPanel"><div class="stockPanelTitle">Adam Advice — priority</div><div id="stockAdvice" class="stockAdvice"></div></div><div class="stockPanel"><div class="stockPanelTitle">Current Positions</div><div id="stockPositions" class="stockMeta">Checking positions…</div></div></div>
+<div class="stockFooter"><div id="stockRegimeReason" class="stockMeta"></div><div id="stockUpdated" class="stockMeta"></div></div>
+</div>
+
+<div id="adamMainStockCompact">
+  <div class="adam-main-stock-head">
+    <div><strong>📈 Adam Market Status</strong> <span id="adamMainMarketBadge">Checking…</span></div>
+    <a href="/stock" class="adam-stock-open-btn">Open Stock</a>
+  </div>
+  <div id="adamMainStockLine">Adam is checking the market.</div>
+  <div id="adamMainStockAlertLine">No urgent BUY or SELL alert.</div>
+</div>
+
+<div id="chat" class="chat">
+<div class="stock-alert-panel" id="adamStockAlerts">
+<div class="stock-alert-head"><div class="stock-alert-title">🚨 Adam Stock Alerts</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+<label>Notify <select id="stockNotificationMode" aria-label="Stock notification mode">
+<option value="once_per_signal" selected>Once per signal</option>
+<option value="status_change">Status changes only</option>
+<option value="every_check">Every check</option>
+<option value="off">Off</option>
+</select></label>
+<label><input type="checkbox" id="stockVoiceAlerts" checked> Voice</label>
+</div></div>
+<div class="small" id="stockNotificationHint">Default: notify once for a new important signal; temporary no-alert cycles do not re-arm the same signal.</div>
+<div class="stock-alert-list" id="stockAlertList"><div class="stock-alert stock-alert-none">No urgent BUY or SELL alert right now.</div></div>
+</div>
+<div class="adam-opportunities" id="adamOpportunities">
+  <h3>🎯 Adam Opportunities</h3>
+  <div class="small" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 10px">
+  <label>Scan universe
+    <select id="adamStockUniverse" style="margin-left:4px;padding:5px">
+      <option value="core10">Core 10</option>
+      <option value="top50">Broad 50</option>
+      <option value="top100">Broad 100</option>
+    </select>
+  </label>
+  <label>Add symbols
+    <input id="adamCustomSymbols" placeholder="e.g. AMZN, META, PLTR" style="margin-left:4px;padding:5px;min-width:180px">
+  </label>
+  <button type="button" id="adamScanStocksBtn" style="padding:6px 10px">Scan Stocks</button>
+</div>
+<div class="small" id="adamOppStatus">Scanning stock universe for opportunities…</div>
+  <div class="opp-grid" id="adamOppGrid"></div>
+</div>
+
+<div class="msg assistant">Adam Acquisition {{ version }} is ready. Ask Adam to prepare a WhatsApp message, then review and approve it before sending.</div></div>
+<div class="composer">
+<div id="state" class="state">Ready</div>
+<div class="small" style="max-width:900px;margin:0 auto 6px">Voice identity: Adam Lebanese 2 + 4 across all languages; only pronunciation changes by language.</div>
+<div class="tools">
+<select id="language">
+<option value="auto">Auto — reply in my language</option>
+<option value="en-US">English</option>
+<option value="ar-LB">Lebanese Arabic</option>
+<option value="ar-AE">Arabic</option>
+<option value="fr-FR">French</option>
+<option value="es-ES">Spanish</option>
+</select>
+<button id="mic">🎤 Start Listening</button>
+<label style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:13px"><input id="voiceAutoSend" type="checkbox" checked> Auto-send voice command</label>
+<button id="stopMic">⏹ Stop</button>
+<button id="voice">🎙 Assistant Voice: ON</button>
+<button id="stopVoice">Stop Speaking</button>
+<a href="/ai-settings"><button>⚙ AI Settings</button></a>
+<button id="installApp" hidden>📱 Install App</button>
+</div>
+
+<div class="attachmentBar">
+  <label class="attachBtn" title="Attach files">
+    📎 Attach
+    <input id="adamFilePicker" type="file" multiple accept=".pdf,.docx,.xlsx,.xlsm,.txt,.md,.csv,.log,image/*">
+  </label>
+  <button id="adamCameraBtn" class="attachBtn" type="button" title="Open camera">📷 Camera</button>
+  <input id="adamCameraPicker" type="file" accept="image/*" capture="environment" style="display:none">
+</div>
+<div id="adamAttachmentPreview" class="attachmentPreview"></div>
+<div class="attachmentHint">Drag files here or paste a screenshot with Ctrl+V. Up to 8 files, 20 MB each.</div>
+<div class="inputrow"><input id="input" placeholder="Type or speak..."><button class="primary" id="send">Send</button></div>
+<div class="small" style="max-width:900px;margin:auto">Adam uses an AI-generated Voice 2 + 4 character style: clear professional, deep calm and strongly Lebanese. If the browser asks for microphone permission, choose <b>Allow</b>. On iPhone/iPad use Safari. On Windows use Chrome or Edge.</div>
+</div>
+</main></div>
+
+<div id="adamCameraModal" class="cameraModal" hidden>
+  <div class="cameraPanel">
+    <div class="cameraTop"><strong>Adam Camera</strong><button id="adamCameraClose" type="button">✕</button></div>
+    <video id="adamCameraVideo" autoplay playsinline muted></video>
+    <canvas id="adamCameraCanvas" hidden></canvas>
+    <img id="adamCameraPhoto" alt="Captured photo" hidden>
+    <div id="adamCameraStatus" class="small">Starting camera…</div>
+    <div class="cameraActions">
+      <button id="adamCaptureBtn" class="primary" type="button">📷 Capture</button>
+      <button id="adamSwitchCameraBtn" type="button">🔄 Switch Camera</button>
+      <button id="adamRetakeBtn" type="button" hidden>Retake</button>
+      <button id="adamUsePhotoBtn" class="primary" type="button" hidden>Use Photo</button>
+      <button id="adamCameraFallbackBtn" type="button">Choose Photo Instead</button>
+    </div>
+  </div>
+</div>
+<script>
+const chat=document.getElementById('chat'),input=document.getElementById('input'),sendBtn=document.getElementById('send');
+const mic=document.getElementById('mic'),stopMic=document.getElementById('stopMic'),voice=document.getElementById('voice'),stopVoice=document.getElementById('stopVoice'),language=document.getElementById('language'),state=document.getElementById('state');
+let history=[],voiceOn=true,rec=null,listening=false;
+let stockDashTimer=null;
+
+function setState(s){state.textContent=s}
+function add(role,text){const d=document.createElement('div');d.className='msg '+(role==='user'?'user':'assistant');d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
+
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function addContactUpdatedCard(action){
+ const c=(action&&action.contact)||{};
+ const changes=(action&&action.changes)||[];
+ const box=document.createElement('div');
+ box.style.cssText='border:1px solid #b2ddff;background:#eff8ff;border-radius:10px;padding:10px 12px;margin:8px 0;max-width:700px;color:#175cd3';
+ box.innerHTML='<strong>✓ Contact updated</strong><br>'
+   +(c.name?'<b>'+esc(c.name)+'</b><br>':'')
+   +(changes.length?changes.map(x=>esc(x)).join('<br>'):'Changes saved successfully.');
+ chat.appendChild(box);
+ chat.scrollTop=chat.scrollHeight;
+}
+function addContactSavedCard(action){
+ const c=(action&&action.contact)||{};
+ const box=document.createElement('div');
+ box.style.cssText='border:1px solid #abefc6;background:#ecfdf3;border-radius:10px;padding:10px 12px;margin:8px 0;max-width:700px;color:#067647';
+ box.innerHTML='<strong>✓ Contact saved in Adam Contacts</strong><br>'
+   +(c.name?'<b>'+esc(c.name)+'</b><br>':'')
+   +(c.email?'Email: '+esc(c.email)+'<br>':'')
+   +(c.phone?'Contact number: '+esc(c.phone)+'<br>':'')
+   +(c.company?'Company: '+esc(c.company)+'<br>':'')
+   +(c.position?'Position: '+esc(c.position):'');
+ chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+function addEmailReview(action){
+ const box=document.createElement('div');box.className='emailReview';
+ const title=document.createElement('strong');title.textContent='Outlook Email — Owner Review';box.appendChild(title);
+
+ const grid=document.createElement('div');grid.className='emailGrid';
+
+ const toWrap=document.createElement('div');const toLabel=document.createElement('label');toLabel.textContent='To';const to=document.createElement('input');to.value=action.to||'';toWrap.append(toLabel,to);
+ const ccWrap=document.createElement('div');const ccLabel=document.createElement('label');ccLabel.textContent='CC (optional)';const cc=document.createElement('input');cc.value=action.cc||'';cc.placeholder='email@example.com';ccWrap.append(ccLabel,cc);
+ grid.append(toWrap,ccWrap);box.appendChild(grid);
+
+ const subLabel=document.createElement('label');subLabel.textContent='Subject — review or edit';
+ const subject=document.createElement('input');subject.value=action.subject||'';box.append(subLabel,subject);
+
+ const msgLabel=document.createElement('label');msgLabel.textContent='Message — review or edit';
+ const message=document.createElement('textarea');message.value=action.body||'';box.append(msgLabel,message);
+
+ const approveWrap=document.createElement('label');approveWrap.className='emailApprove';
+ const approve=document.createElement('input');approve.type='checkbox';
+ const approveText=document.createElement('span');approveText.textContent='I approve sending this email from my connected Outlook account now';
+ approveWrap.append(approve,approveText);box.appendChild(approveWrap);
+
+ const button=document.createElement('button');button.className='emailSend';button.textContent='Send Email';button.disabled=true;
+ approve.onchange=()=>button.disabled=!approve.checked;
+
+ const status=document.createElement('div');status.className='emailStatus';
+
+ button.onclick=async()=>{
+   if(!approve.checked)return;
+   if(!to.value.trim()||!subject.value.trim()||!message.value.trim()){
+     status.className='emailStatus warn';status.textContent='To, Subject and Message are required.';return;
+   }
+   button.disabled=true;status.className='emailStatus';status.textContent='Sending through Outlook…';
+   try{
+     const r=await fetch('/api/email-send-main',{
+       method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({approved:true,to:to.value.trim(),cc:cc.value.trim(),bcc:'',subject:subject.value.trim(),body:message.value.trim()})
+     });
+     const d=await r.json();
+     if(!d.ok)throw new Error(d.error||'Email send failed');
+     status.className='emailStatus ok';status.textContent='Email sent successfully from Outlook.';
+     to.readOnly=true;cc.readOnly=true;subject.readOnly=true;message.readOnly=true;approve.disabled=true;
+     button.textContent='Sent';button.disabled=true;
+     add('assistant','Email sent successfully to '+(action.contact_name||to.value)+'.');
+   }catch(e){
+     status.className='emailStatus warn';status.textContent='Not sent: '+e.message;
+     button.disabled=!approve.checked;
+   }
+ };
+ box.append(button,status);chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+
+function addWhatsAppReview(action){
+ const box=document.createElement('div');box.className='waReview';
+ const title=document.createElement('strong');title.textContent='WhatsApp — Owner Review';box.appendChild(title);
+ const grid=document.createElement('div');grid.className='waGrid';
+ const contactWrap=document.createElement('div');const contactLabel=document.createElement('label');contactLabel.textContent='Contact';const contact=document.createElement('input');contact.value=action.contact_name||'';contact.readOnly=true;contactWrap.append(contactLabel,contact);
+ const phoneWrap=document.createElement('div');const phoneLabel=document.createElement('label');phoneLabel.textContent='WhatsApp number';const phone=document.createElement('input');phone.value=action.phone||'';phone.readOnly=true;phoneWrap.append(phoneLabel,phone);grid.append(contactWrap,phoneWrap);box.appendChild(grid);
+ const msgLabel=document.createElement('label');msgLabel.textContent='Message — review or edit';const message=document.createElement('textarea');message.value=action.message||'';box.append(msgLabel,message);
+ const approveWrap=document.createElement('label');approveWrap.className='waApprove';const approve=document.createElement('input');approve.type='checkbox';const approveText=document.createElement('span');approveText.textContent='I approve sending this WhatsApp message now';approveWrap.append(approve,approveText);box.appendChild(approveWrap);
+ const button=document.createElement('button');button.className='waSend';button.textContent='Send WhatsApp Message';button.disabled=true;approve.onchange=()=>button.disabled=!approve.checked;
+ const status=document.createElement('div');status.className='waStatus';
+ button.onclick=async()=>{if(!approve.checked)return;button.disabled=true;status.textContent='Sending through WhatsApp Business…';try{const r=await fetch('/api/whatsapp/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved:true,phone:phone.value,message:message.value})});const d=await r.json();if(!d.ok)throw new Error(d.error||'WhatsApp send failed');status.className='waStatus ok';status.textContent='WhatsApp message accepted by Meta'+(d.message_id?' — ID: '+d.message_id:'')+'.';message.readOnly=true;approve.disabled=true;button.textContent='Sent';add('assistant','WhatsApp message sent to '+contact.value+'.')}catch(e){status.className='waStatus warn';status.textContent='Not sent: '+e.message;button.disabled=!approve.checked}};
+ box.append(button,status);chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+
+
+
+
+
+
+function stockEsc(v){const d=document.createElement('div');d.textContent=String(v??'');return d.innerHTML}
+function stockMoney(v){const n=Number(v);return Number.isFinite(n)?'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}
+function stockPL(el,value,pct){const n=Number(value||0),p=Number(pct||0);el.textContent=(n>=0?'+':'')+stockMoney(n)+' ('+(p>=0?'+':'')+p.toFixed(2)+'%)';el.className=n>0?'stockPositive':n<0?'stockNegative':'stockNeutral'}
+async function refreshStockDashboard(speakAlert=false){
+ const market=document.getElementById('stockMarket'),headline=document.getElementById('stockHeadline'),advice=document.getElementById('stockAdvice'),updated=document.getElementById('stockUpdated');
+ const dash=document.getElementById('stockDash');market.textContent='Checking live Alpaca data…';
+ try{
+   const r=await fetch('/api/stock/main-summary');const d=await r.json();if(!d.ok)throw new Error(d.error||'Stock check failed');
+   market.textContent=(d.market_open?'MARKET OPEN':'MARKET CLOSED')+' • PAPER ONLY'+(d.market_open&&d.next_close?' • next close '+new Date(d.next_close).toLocaleTimeString():(!d.market_open&&d.next_open?' • next open '+new Date(d.next_open).toLocaleString():''));
+   headline.textContent=d.headline;
+   const regime=document.getElementById('stockRegime');regime.textContent=d.market_regime||'UNKNOWN';regime.className='stockRegime '+(d.market_regime==='BULLISH'?'stockPositive':d.market_regime==='BEARISH'?'stockNegative':'stockNeutral');
+   document.getElementById('stockPortfolio').textContent=stockMoney(d.account?.portfolio_value);document.getElementById('stockCash').textContent=stockMoney(d.account?.cash);document.getElementById('stockInvested').textContent=stockMoney(d.account?.invested);
+   stockPL(document.getElementById('stockTodayPL'),d.account?.today_pl,d.account?.today_pl_pct);stockPL(document.getElementById('stockTotalPL'),d.account?.unrealized_pl,d.account?.unrealized_pl_pct);
+   const arr=d.advice||[];advice.innerHTML=arr.slice(0,6).map(x=>'<div class="stockChip '+(x.action==='SELL'?'stockUrgent':'')+'"><b class="stock'+stockEsc(x.action.charAt(0)+x.action.slice(1).toLowerCase())+'">'+stockEsc(x.action)+'</b> <strong>'+stockEsc(x.symbol)+'</strong> — '+stockEsc(x.reason)+'</div>').join('') || '<div class="stockChip"><b class="stockWait">WAIT</b> No urgent BUY or SELL signal now.</div>';
+   const pos=d.positions||[];document.getElementById('stockPositions').innerHTML=pos.length?'<table class="stockTable"><thead><tr><th>Stock</th><th>Entry</th><th>Now</th><th>P/L</th><th>Adam</th></tr></thead><tbody>'+pos.map(x=>'<tr><td><b>'+stockEsc(x.symbol)+'</b></td><td>'+stockMoney(x.avg_entry_price)+'</td><td>'+stockMoney(x.current_price)+'</td><td class="'+(Number(x.pl_pct)>=0?'stockPositive':'stockNegative')+'">'+(Number(x.pl_pct)>=0?'+':'')+Number(x.pl_pct).toFixed(2)+'%</td><td><b class="stock'+stockEsc(x.action.charAt(0)+x.action.slice(1).toLowerCase())+'">'+stockEsc(x.action)+'</b></td></tr>').join('')+'</tbody></table>':'<span>No open paper positions.</span>';
+   document.getElementById('stockRegimeReason').textContent=d.market_regime_reason||'';updated.textContent='Last checked: '+new Date().toLocaleString()+' • automatic check every 2 minutes';
+   const urgent=arr.some(x=>x.action==='SELL');dash.classList.toggle('stockUrgent',urgent);
+   if(speakAlert && arr.some(x=>x.action==='SELL' || x.action==='BUY')){const sells=arr.filter(x=>x.action==='SELL').map(x=>x.symbol).join(', '),buys=arr.filter(x=>x.action==='BUY').map(x=>x.symbol).join(', ');speak('Adam stock update. '+(sells?'Sell alert for '+sells+'. ':'')+(buys?'Buy candidate '+buys+'. ':'')+d.market_regime+' market condition.');}
+ }catch(e){market.textContent='STOCK CHECK UNAVAILABLE';headline.textContent='Adam could not read Alpaca right now.';advice.innerHTML='<span class="stockError">'+stockEsc(e.message)+'</span>';document.getElementById('stockPositions').textContent='—';updated.textContent='';}
+}
+document.getElementById('stockRefresh').onclick=()=>refreshStockDashboard(true);
+refreshStockDashboard(false);
+stockDashTimer=setInterval(()=>refreshStockDashboard(false),120000);
+
+let currentAudio=null;
+
+function speakWithDevice(text,reason){
+ if(!('speechSynthesis' in window)){setState('Voice not available');return}
+ try{
+   const u=new SpeechSynthesisUtterance(text);
+   const selected=adamPickDeviceVoice();
+   if(selected){u.voice=selected;u.lang=selected.lang||adamLanguageBase()}
+   else{u.lang=adamLanguageBase()}
+   // Fixed character parameters chosen to keep Adam's Voice 2+4 identity
+   // perceptually consistent across languages on device fallback.
+   u.rate=0.94;
+   u.pitch=0.88;
+   u.volume=1.0;
+   u.onstart=()=>setState('Speaking — Adam unified Voice 2 + 4…');
+   u.onend=()=>setState('Ready');
+   u.onerror=()=>setState('Voice playback error');
+   speechSynthesis.cancel();
+   speechSynthesis.speak(u);
+ }catch(e){setState('Voice playback error')}
+}
+
+
+const ADAM_MASTER_VOICE_IDENTITY='Lebanese Voice 2 + 4';
+
+function adamLanguageBase(){
+  const el=document.getElementById('language');
+  const raw=(el&&el.value)||'en';
+  return String(raw).toLowerCase().split('-')[0];
+}
+
+function adamPickDeviceVoice(){
+  const base=adamLanguageBase();
+  const voices=(window.speechSynthesis&&speechSynthesis.getVoices())||[];
+  if(!voices.length)return null;
+
+  // Prefer the same provider/family first so language changes do not jump
+  // between unrelated voice families when a multilingual family is available.
+  const preferredFamilies=['Microsoft','Google','Apple'];
+  const langMatches=voices.filter(v=>(v.lang||'').toLowerCase().startsWith(base));
+
+  for(const family of preferredFamilies){
+    const candidate=langMatches.find(v=>(v.name||'').includes(family));
+    if(candidate)return candidate;
+  }
+  return langMatches[0]||voices[0]||null;
+}
+
+async function adamUnifiedVoiceProfile(){
+  try{
+    const base=adamLanguageBase();
+    const r=await fetch('/api/voice/profile?language='+encodeURIComponent(base));
+    const d=await r.json();
+    return d&&d.ok?d.profile:null;
+  }catch(_){return null}
+}
+
+async function speakCharacter(text){
+ if(!voiceOn){setState('Ready');return}
+ if(currentAudio){try{currentAudio.pause()}catch(e){} currentAudio=null}
+ setState('Generating Lebanese character voice…');
+ try{
+   const r=await fetch('/api/tts',{
+     method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({
+       text:text,
+       language:(language.value==='auto' ? (/[؀-ۿ]/.test(text)?'ar-LB':'en-US') : language.value)
+     })
+   });
+   if(!r.ok){
+     let msg='Voice request failed';
+     try{const d=await r.json();msg=d.error||msg}catch(e){}
+     throw new Error(msg);
+   }
+   const blob=await r.blob();
+   const url=URL.createObjectURL(blob);
+   currentAudio=new Audio(url);
+   const source=r.headers.get('X-Adam-Voice-Source');
+   currentAudio.onplay=()=>setState(source==='windows'?'Speaking — Adam unified voice fallback…':'Speaking — Adam Voice 2 + 4 identity…');
+   currentAudio.onended=()=>{setState('Ready');URL.revokeObjectURL(url);currentAudio=null};
+   currentAudio.onerror=()=>{setState('Voice playback error');URL.revokeObjectURL(url);currentAudio=null};
+   await currentAudio.play();
+ }catch(e){
+   speakWithDevice(text,e.message);
+ }
+}
+
+function speak(text){
+ if(!voiceOn){setState('Ready');return}
+ speakCharacter(text);
+}
+
+
+let adamPendingFiles=[];
+
+function adamFileKey(f){return [f.name,f.size,f.lastModified].join('|')}
+
+function adamAddFiles(fileList){
+  for(const f of Array.from(fileList||[])){
+    if(adamPendingFiles.length>=8){setState('Maximum 8 attachments at one time');break}
+    if(f.size>20*1024*1024){setState(f.name+' is larger than 20 MB');continue}
+    if(!adamPendingFiles.some(x=>adamFileKey(x)===adamFileKey(f)))adamPendingFiles.push(f);
+  }
+  adamRenderAttachments();
+}
+
+function adamRemoveFile(i){
+  adamPendingFiles.splice(i,1);adamRenderAttachments();
+}
+
+function adamRenderAttachments(){
+  const box=document.getElementById('adamAttachmentPreview');if(!box)return;
+  box.innerHTML='';
+  adamPendingFiles.forEach((f,i)=>{
+    const chip=document.createElement('div');chip.className='attachmentChip';
+    if((f.type||'').startsWith('image/')){
+      const img=document.createElement('img');img.src=URL.createObjectURL(f);img.onload=()=>URL.revokeObjectURL(img.src);chip.appendChild(img);
+    }else{
+      const icon=document.createElement('span');icon.textContent='📄';chip.appendChild(icon);
+    }
+    const name=document.createElement('span');name.className='fileText';name.textContent=f.name;name.title=f.name;chip.appendChild(name);
+    const x=document.createElement('button');x.type='button';x.className='attachmentRemove';x.textContent='×';x.title='Remove';x.onclick=()=>adamRemoveFile(i);chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+
+const adamFilePicker=document.getElementById('adamFilePicker');
+const adamCameraPicker=document.getElementById('adamCameraPicker');
+const adamCameraBtn=document.getElementById('adamCameraBtn');
+const adamCameraModal=document.getElementById('adamCameraModal');
+const adamCameraVideo=document.getElementById('adamCameraVideo');
+const adamCameraCanvas=document.getElementById('adamCameraCanvas');
+const adamCameraPhoto=document.getElementById('adamCameraPhoto');
+const adamCameraStatus=document.getElementById('adamCameraStatus');
+const adamCaptureBtn=document.getElementById('adamCaptureBtn');
+const adamRetakeBtn=document.getElementById('adamRetakeBtn');
+const adamUsePhotoBtn=document.getElementById('adamUsePhotoBtn');
+const adamCameraClose=document.getElementById('adamCameraClose');
+const adamCameraFallbackBtn=document.getElementById('adamCameraFallbackBtn');
+const adamSwitchCameraBtn=document.getElementById('adamSwitchCameraBtn');
+let adamCameraStream=null,adamCapturedBlob=null,adamCameraFacing='environment';
+
+if(adamFilePicker)adamFilePicker.addEventListener('change',e=>{adamAddFiles(e.target.files);e.target.value=''});
+if(adamCameraPicker)adamCameraPicker.addEventListener('change',e=>{adamAddFiles(e.target.files);e.target.value=''});
+
+function adamStopCamera(){
+  if(adamCameraStream){adamCameraStream.getTracks().forEach(t=>t.stop());adamCameraStream=null}
+  if(adamCameraVideo)adamCameraVideo.srcObject=null;
+}
+function adamCloseCamera(){
+  adamStopCamera();adamCapturedBlob=null;
+  if(adamCameraModal)adamCameraModal.hidden=true;
+}
+async function adamOpenCamera(){
+  if(!adamCameraModal)return;
+  adamCameraModal.hidden=false;adamCapturedBlob=null;
+  adamCameraPhoto.hidden=true;adamCameraVideo.hidden=false;
+  adamCaptureBtn.hidden=false;adamRetakeBtn.hidden=true;adamUsePhotoBtn.hidden=true;
+  adamCameraStatus.textContent='Starting camera…';
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('Live camera is not supported by this browser.');
+    adamCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:adamCameraFacing}},audio:false});
+    adamCameraVideo.style.transform='scaleX(-1)';
+    adamCameraVideo.style.webkitTransform='scaleX(-1)';
+    adamCameraVideo.srcObject=adamCameraStream;
+    await adamCameraVideo.play();
+    adamCameraStatus.textContent='Camera ready';
+  }catch(e){
+    adamCameraStatus.textContent='Camera could not open: '+e.message+' — check browser camera permission. You can choose a photo manually if needed.';
+    adamStopCamera();
+  }
+}
+function adamCapturePhoto(){
+  if(!adamCameraVideo.videoWidth){adamCameraStatus.textContent='Camera is not ready yet.';return}
+  const maxWidth=1920;
+  const scale=Math.min(1,maxWidth/adamCameraVideo.videoWidth);
+  adamCameraCanvas.width=Math.round(adamCameraVideo.videoWidth*scale);
+  adamCameraCanvas.height=Math.round(adamCameraVideo.videoHeight*scale);
+  const ctx=adamCameraCanvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,adamCameraCanvas.width,adamCameraCanvas.height);
+  // Mirror the captured pixels to match the preview: user's left stays on screen-left and right stays on screen-right.
+  ctx.save();
+  ctx.translate(adamCameraCanvas.width,0);
+  ctx.scale(-1,1);
+  ctx.drawImage(adamCameraVideo,0,0,adamCameraCanvas.width,adamCameraCanvas.height);
+  ctx.restore();
+  adamCameraCanvas.toBlob(blob=>{
+    if(!blob){adamCameraStatus.textContent='Could not capture photo.';return}
+    adamCapturedBlob=blob;
+    // Captured pixels are already mirrored; do not mirror the review image a second time.
+    adamCameraPhoto.style.transform='none';
+    adamCameraPhoto.style.webkitTransform='none';
+    adamCameraPhoto.src=URL.createObjectURL(blob);
+    adamCameraPhoto.hidden=false;adamCameraVideo.hidden=true;
+    adamCaptureBtn.hidden=true;adamRetakeBtn.hidden=false;adamUsePhotoBtn.hidden=false;
+    adamCameraStatus.textContent='Review photo';
+    adamStopCamera();
+  },'image/jpeg',0.9);
+}
+async function adamRetakePhoto(){
+  if(adamCameraPhoto.src)URL.revokeObjectURL(adamCameraPhoto.src);
+  adamCapturedBlob=null;adamCameraPhoto.hidden=true;adamCameraVideo.hidden=false;
+  adamCaptureBtn.hidden=false;adamRetakeBtn.hidden=true;adamUsePhotoBtn.hidden=true;
+  await adamOpenCamera();
+}
+function adamUseCapturedPhoto(){
+  if(!adamCapturedBlob)return;
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const f=new File([adamCapturedBlob],'Adam_Camera_'+stamp+'.jpg',{type:'image/jpeg',lastModified:Date.now()});
+  adamAddFiles([f]);adamCloseCamera();setState('Photo attached — add an instruction or press Send');
+}
+if(adamCameraBtn)adamCameraBtn.onclick=adamOpenCamera;
+if(adamCaptureBtn)adamCaptureBtn.onclick=adamCapturePhoto;
+if(adamRetakeBtn)adamRetakeBtn.onclick=adamRetakePhoto;
+if(adamUsePhotoBtn)adamUsePhotoBtn.onclick=adamUseCapturedPhoto;
+if(adamSwitchCameraBtn)adamSwitchCameraBtn.onclick=async()=>{adamCameraFacing=adamCameraFacing==='environment'?'user':'environment';adamStopCamera();await adamOpenCamera()};
+if(adamCameraClose)adamCameraClose.onclick=adamCloseCamera;
+if(adamCameraFallbackBtn)adamCameraFallbackBtn.onclick=()=>{adamCloseCamera();adamCameraPicker.click()};
+if(adamCameraModal)adamCameraModal.addEventListener('click',e=>{if(e.target===adamCameraModal)adamCloseCamera()});
+
+const adamComposer=document.querySelector('.composer');
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>e.preventDefault());
+if(adamComposer){
+  ['dragenter','dragover'].forEach(ev=>adamComposer.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();adamComposer.classList.add('dropActive')}));
+  ['dragleave'].forEach(ev=>adamComposer.addEventListener(ev,e=>{e.preventDefault();adamComposer.classList.remove('dropActive')}));
+  adamComposer.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();adamComposer.classList.remove('dropActive');adamAddFiles(e.dataTransfer.files);setState('Attachment added — add an instruction or press Send')});
+}
+
+document.addEventListener('paste',e=>{
+  const files=[];
+  for(const item of Array.from((e.clipboardData&&e.clipboardData.items)||[])){
+    if(item.kind==='file'){const f=item.getAsFile();if(f){const ext=(f.type==='image/jpeg'?'.jpg':f.type==='image/webp'?'.webp':'.png');files.push(new File([f],'Pasted_Screenshot_'+Date.now()+ext,{type:f.type||'image/png',lastModified:Date.now()}))}}
+  }
+  if(files.length)adamAddFiles(files);
+});
+
+async function adamAnalyzePendingAttachments(userInstruction,filesToAnalyze){
+  const files=Array.from(filesToAnalyze||adamPendingFiles);
+  if(!files.length)return '';
+  const fd=new FormData();
+  files.forEach(f=>fd.append('files',f,f.name));
+  fd.append('instruction',userInstruction||'Read these attachments for my request.');
+  setState('Recognizing '+files.length+' attachment'+(files.length===1?'':'s')+'…');
+  const r=await fetch('/api/main/attachments/analyze',{method:'POST',body:fd});
+  const raw=await r.text();
+  let d;try{d=JSON.parse(raw)}catch(_){throw new Error('Attachment server error: '+raw.slice(0,150))}
+  if(!d.ok)throw new Error(d.error||'Camera/attachment recognition failed');
+  if((d.warnings||[]).length)setState('Attachments read with warning: '+d.warnings.join(' | '));
+  return d.context||'';
+}
+
+
+function addWorkflowReview(a){
+ const box=document.createElement('div');box.className='emailReview';const h=document.createElement('strong');h.textContent='Adam Workflow — Owner Review';box.appendChild(h);
+ const st=document.createElement('div');st.className='small';st.style.margin='8px 0';st.textContent=(a.steps||[]).join(' → ');box.appendChild(st);
+ const lab=document.createElement('label');lab.textContent='Prepared draft — review or edit';const draft=document.createElement('textarea');draft.value=a.draft||'';draft.style.minHeight='220px';box.append(lab,draft);
+ const status=document.createElement('div');status.className='emailStatus';box.appendChild(status);
+ if(a.needs_email){const w=document.createElement('label');w.className='emailApprove';const c=document.createElement('input');c.type='checkbox';const t=document.createElement('span');t.textContent='I approve sending this draft by Outlook now';w.append(c,t);box.appendChild(w);
+ const b=document.createElement('button');b.className='emailSend';b.textContent='Send Approved Email';b.disabled=true;c.onchange=()=>b.disabled=!c.checked;
+ b.onclick=async()=>{if(!a.contact_email){status.textContent='Contact email is missing.';return}b.disabled=true;status.textContent='Recording owner approval…';try{
+ let ar=await fetch('/api/workflows/'+a.workflow_id+'/approve-step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({step:'email_review',approved:true})});let ad=await ar.json();if(!ad.ok)throw new Error(ad.error||'Approval recording failed');
+ status.textContent='Approved. Sending…';
+ let r=await fetch('/api/email-send-main',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved:true,to:a.contact_email,subject:'Adam prepared response',body:draft.value})});let d=await r.json();if(!d.ok)throw new Error(d.error||'Send failed');status.textContent='Email sent successfully from Outlook.';
+ let cr=await fetch('/api/workflows/'+a.workflow_id+'/complete-step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({step:'email_review',execution_succeeded:true})});let cd=await cr.json();if(!cd.ok)throw new Error(cd.error||'Workflow completion failed');if(a.needs_followup){let fr=await fetch('/api/workflows/'+a.workflow_id+'/followup-after-send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delivery_succeeded:true,days:a.followup_days||3,contact_name:a.contact_name||'',contact_email:a.contact_email||'',title:'Follow up with '+(a.contact_name||a.contact_email||'contact')})});let fd=await fr.json();if(fd.ok)status.textContent+=' Follow-up scheduled.'}}catch(e){status.textContent='Not sent: '+e.message;b.disabled=false}};box.appendChild(b)}
+ if(a.needs_whatsapp){const n=document.createElement('div');n.className='small';n.textContent='WhatsApp remains subject to separate owner approval.';box.appendChild(n)}
+ chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+async function send(){
+ const text=input.value.trim();
+ if(!text&&!adamPendingFiles.length)return;
+ const filesForThisSend=[...adamPendingFiles];
+ const shownText=text||(filesForThisSend.length===1?'Analyze this attachment.':'Analyze these attachments.');
+ input.value='';
+ add('user',shownText+(filesForThisSend.length?'\n📎 '+filesForThisSend.map(f=>f.name).join(', '):''));
+ setState('Processing…');sendBtn.disabled=true;
+ try{
+    let attachment_context='';
+    if(filesForThisSend.length)attachment_context=await adamAnalyzePendingAttachments(shownText,filesForThisSend);
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:shownText,attachment_context,messages:history.slice(-12),response_language:language.value})});const raw=await r.text();
+    let d;
+    try{ d=JSON.parse(raw); }
+    catch(_){ throw new Error('Server returned HTTP '+r.status+' instead of JSON. '+raw.slice(0,160)); }if(!d.ok)throw new Error(d.error||'Request failed');
+
+add('assistant',d.reply);adamPendingFiles=[];adamRenderAttachments();if(d.action&&d.action.type==='workflow_review')addWorkflowReview(d.action);if(d.action&&d.action.type==='whatsapp_review')addWhatsAppReview(d.action);
+  if(d.action&&d.action.type==='calendar_review'){
+    const a=d.action;
+    const box=document.createElement('div');box.className='emailReview';
+    const title=document.createElement('strong');title.textContent='Outlook Meeting — Owner Review';box.appendChild(title);
+
+    const attendeeLabel=document.createElement('label');attendeeLabel.textContent='Attendee';
+    const attendee=document.createElement('input');attendee.value=(a.attendee_name||'')+' — '+(a.attendee_email||'');attendee.readOnly=true;
+    box.append(attendeeLabel,attendee);
+
+    const subLabel=document.createElement('label');subLabel.textContent='Subject — review or edit';
+    const subject=document.createElement('input');subject.value=a.subject||'Meeting';box.append(subLabel,subject);
+
+    const dateLabel=document.createElement('label');dateLabel.textContent='Date & Time — review or edit';
+    const start=document.createElement('input');start.type='datetime-local';start.value=a.start_local||'';box.append(dateLabel,start);
+
+    const durLabel=document.createElement('label');durLabel.textContent='Duration (minutes)';
+    const duration=document.createElement('input');duration.type='number';duration.min='15';duration.step='15';duration.value=a.duration_minutes||60;
+    box.append(durLabel,duration);
+
+    const approveWrap=document.createElement('label');approveWrap.className='emailApprove';
+    const approve=document.createElement('input');approve.type='checkbox';
+    const approveText=document.createElement('span');approveText.textContent='I approve creating this Outlook meeting and sending the invitation now';
+    approveWrap.append(approve,approveText);box.appendChild(approveWrap);
+
+    const button=document.createElement('button');button.className='emailSend';button.textContent='Create Meeting';button.disabled=true;
+    approve.onchange=()=>button.disabled=!approve.checked;
+    const status=document.createElement('div');status.className='emailStatus';
+
+    button.onclick=async()=>{
+      if(!approve.checked)return;
+      button.disabled=true;status.textContent='Creating Outlook meeting…';
+      try{
+        const r=await fetch('/api/calendar-create-main',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            approved:true,
+            attendee_name:a.attendee_name||'',
+            attendee_email:a.attendee_email||'',
+            subject:subject.value.trim(),
+            start_local:start.value,
+            duration_minutes:Number(duration.value||60)
+          })
+        });
+        const x=await r.json();
+        if(!x.ok)throw new Error(x.error||'Meeting creation failed');
+        status.className='emailStatus ok';status.textContent='Meeting created in Outlook and invitation sent.';
+        subject.readOnly=true;start.readOnly=true;duration.readOnly=true;approve.disabled=true;
+        button.textContent='Created';button.disabled=true;
+        add('assistant','Meeting created in Outlook for '+(a.attendee_name||a.attendee_email)+'.');
+      }catch(e){
+        status.className='emailStatus warn';status.textContent='Not created: '+e.message;
+        button.disabled=!approve.checked;
+      }
+    };
+    box.append(button,status);chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+  }
+
+if(d.action&&d.action.type==='email_review')addEmailReview(d.action);if(d.action&&d.action.type==='contact_saved')addContactSavedCard(d.action);if(d.action&&d.action.type==='contact_updated')addContactUpdatedCard(d.action);history.push({role:'user',content:text},{role:'assistant',content:d.reply});speak(d.reply)}
+ catch(e){add('assistant','Error: '+e.message);setState('Error')}
+ finally{sendBtn.disabled=false}
+}
+sendBtn.onclick=send;input.addEventListener('keydown',e=>{if(e.key==='Enter')send()});
+voice.onclick=()=>{voiceOn=!voiceOn;voice.textContent=voiceOn?'🎙 Assistant Voice: ON':'🔇 Assistant Voice: OFF'};
+stopVoice.onclick=()=>{
+ if(currentAudio){try{currentAudio.pause()}catch(e){} currentAudio=null}
+ if('speechSynthesis' in window)window.speechSynthesis.cancel();
+ setState('Ready')
+};
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+ let voiceFinalBuffer='';
+ let voiceAutoSendTimer=null;
+ let voiceSilenceTimer=null;
+
+ rec=new SR();
+ rec.interimResults=true;
+ rec.continuous=true;
+
+ rec.onstart=()=>{
+   listening=true;
+   voiceFinalBuffer='';
+   setState('Listening…');
+   mic.classList.add('micActive');
+   mic.textContent='🎤 Listening…';
+ };
+
+ rec.onresult=e=>{
+   clearTimeout(voiceSilenceTimer);
+   let finalText='',interim='';
+   for(let i=e.resultIndex;i<e.results.length;i++){
+     const t=e.results[i][0].transcript;
+     if(e.results[i].isFinal) finalText+=t;
+     else interim+=t;
+   }
+
+   if(finalText){
+     voiceFinalBuffer=(voiceFinalBuffer+' '+finalText).trim();
+     input.value=voiceFinalBuffer;
+     setState('Voice command captured…');
+   }else if(interim){
+     input.value=(voiceFinalBuffer+' '+interim).trim();
+     setState('Listening… '+interim);
+   }
+   // Do not end on a short natural pause. Three seconds of complete silence
+   // marks the end of the speaker's turn; Stop Listening remains available.
+   voiceSilenceTimer=setTimeout(()=>{if(listening)rec.stop()},3000);
+ };
+
+ rec.onerror=e=>{
+   listening=false;
+   mic.classList.remove('micActive');
+   mic.textContent='🎤 Start Listening';
+   if(e.error==='no-speech'){
+     setState('I did not hear a command. Try again.');
+   }else{
+     setState('Microphone error: '+e.error+'. Check browser microphone permission.');
+   }
+ };
+
+ rec.onend=()=>{
+   clearTimeout(voiceSilenceTimer);
+   listening=false;
+   mic.classList.remove('micActive');
+   mic.textContent='🎤 Start Listening';
+
+   const captured=(voiceFinalBuffer||input.value||'').trim();
+   const autoSend=document.getElementById('voiceAutoSend');
+   const shouldAutoSend=!autoSend || autoSend.checked;
+
+   if(captured){
+     input.value=captured;
+     if(shouldAutoSend){
+       setState('Voice command received — Adam is processing…');
+       clearTimeout(voiceAutoSendTimer);
+       voiceAutoSendTimer=setTimeout(()=>{
+         if(!sendBtn.disabled && input.value.trim()){
+           send();
+         }
+       },350);
+     }else{
+       setState('Voice command captured — press Send');
+     }
+   }else{
+     setState('Ready');
+   }
+ };
+
+ mic.onclick=()=>{
+   try{
+     if(listening){
+       rec.stop();
+       return;
+     }
+     rec.lang=(language.value==='auto'?'en-US':language.value);
+     rec.start();
+   }catch(e){
+     setState('Microphone could not start: '+e.message);
+   }
+ };
+
+ stopMic.onclick=()=>{
+   if(listening) rec.stop();
+ };
+}else{
+ mic.onclick=()=>setState('This browser does not provide speech recognition. Use Chrome/Edge on Windows, or type your message.');
+ stopMic.disabled=true;
+}
+</script>
+
+<script>
+const menuBtn=document.getElementById('menuBtn');
+const sideNav=document.querySelector('aside');
+const navOverlay=document.getElementById('navOverlay');
+function closeMenu(){sideNav.classList.remove('open');navOverlay.classList.remove('open')}
+menuBtn.addEventListener('click',()=>{sideNav.classList.toggle('open');navOverlay.classList.toggle('open')});
+navOverlay.addEventListener('click',closeMenu);
+sideNav.querySelectorAll('a').forEach(a=>a.addEventListener('click',closeMenu));
+</script>
+<script>let installPrompt=null;const installApp=document.getElementById('installApp');window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;installApp.hidden=false});installApp.addEventListener('click',async()=>{if(!installPrompt){location.href='/mobile-setup';return}installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;installApp.hidden=true});if('serviceWorker'in navigator){navigator.serviceWorker.register('/static/service-worker.js').then(reg=>{reg.addEventListener('updatefound',()=>{const w=reg.installing;if(w)w.addEventListener('statechange',()=>{if(w.state==='installed'&&navigator.serviceWorker.controller)setState('Update available. Refresh the page to install it.')})})}).catch(()=>{})}</script>
+
+<script id="adam-opportunities-script">
+function adamRenderOpportunities(data){
+  const grid=document.getElementById('adamOppGrid');
+  const status=document.getElementById('adamOppStatus');
+  if(!grid||!status) return;
+  const items=(data&&data.scan_display&&data.scan_display.length)?data.scan_display:((data&&data.candidates)||[]);
+  if(!items.length){
+    status.textContent='Adam could not receive watchlist scan data.';
+    grid.innerHTML='';
+    return;
+  }
+  const buys=items.filter(x=>String(x.action||'').toUpperCase()==='BUY').length;
+  status.textContent=buys
+    ? `Adam checked ${items.length} symbols • ${buys} BUY candidate${buys===1?'':'s'} found.`
+    : `Adam checked ${items.length} symbols • no BUY signal now; WAIT/HOLD reasons are shown below.`;
+  grid.innerHTML=items.slice(0,8).map(x=>{
+    const action=String(x.action||'WAIT').toUpperCase();
+    const cls=action==='BUY'?'opp-buy':action==='SELL'?'opp-sell':action.includes('HOLD')?'opp-hold':'opp-wait';
+    const price=(x.price===null||x.price===undefined)?'—':'$'+Number(x.price).toFixed(2);
+    const rsi=(x.rsi===null||x.rsi===undefined)?'—':x.rsi;
+    const s5=(x.sma5===null||x.sma5===undefined)?'—':x.sma5;
+    const s20=(x.sma20===null||x.sma20===undefined)?'—':x.sma20;
+    const conf=(x.confidence===null||x.confidence===undefined)?'—':x.confidence+'%';
+    const trend=x.trend||((Number(x.sma5)>Number(x.sma20))?'UP':'DOWN');
+    const badge=x.held?' • YOUR POSITION':(x.market_reference?' • MARKET':'');
+    return `<div class="opp-card">
+      <div class="opp-head">
+        <div class="opp-symbol">#${x.rank||''} ${x.symbol||''}${badge}</div>
+        <div class="opp-action ${cls}">${action}</div>
+      </div>
+      <div class="opp-meta">Price ${price} • Confidence ${conf}<br>RSI ${rsi} • Trend ${trend}<br>SMA5 ${s5} • SMA20 ${s20}</div>
+      <div class="opp-reason">${x.reason||''}</div>
+    </div>`;
+  }).join('');
+}
+</script>
+
+
+<script>
+function adamStockScanUrl(){
+  const universe=document.getElementById('adamStockUniverse');
+  const custom=document.getElementById('adamCustomSymbols');
+  const params=new URLSearchParams();
+  params.set('universe',universe?universe.value:'core10');
+  if(custom&&custom.value.trim())params.set('watchlist',custom.value.trim());
+  return '/api/stock/main-summary?'+params.toString();
+}
+function adamRestoreStockUniverse(){
+  const universe=document.getElementById('adamStockUniverse');
+  const custom=document.getElementById('adamCustomSymbols');
+  if(universe)universe.value=localStorage.getItem('adam_stock_universe')||'core10';
+  if(custom)custom.value=localStorage.getItem('adam_custom_symbols')||'';
+}
+async function adamLoadOpportunities(){
+  try{
+    const universe=document.getElementById('adamStockUniverse');
+    const custom=document.getElementById('adamCustomSymbols');
+    if(universe)localStorage.setItem('adam_stock_universe',universe.value);
+    if(custom)localStorage.setItem('adam_custom_symbols',custom.value.trim());
+    const status=document.getElementById('adamOppStatus');
+    if(status)status.textContent='Adam is scanning the selected stock universe…';
+    const r=await fetch(adamStockScanUrl());
+    const data=await r.json();
+    if(!r.ok||!data.ok)throw new Error(data.error||'Stock scan failed');
+    adamRenderOpportunities(data);adamRenderStockAlerts(data);
+    if(status)status.textContent+=` • universe ${data.stock_universe||'core10'} • ${data.scan_symbol_count||0} symbols requested`;
+  }catch(e){
+    const s=document.getElementById('adamOppStatus');
+    if(s) s.textContent='Opportunity scan unavailable: '+e.message;
+  }
+}
+adamRestoreStockUniverse();
+const adamScanBtn=document.getElementById('adamScanStocksBtn');
+if(adamScanBtn)adamScanBtn.addEventListener('click',adamLoadOpportunities);
+adamLoadOpportunities();
+setInterval(adamLoadOpportunities,120000);
+</script>
+
+<script id="adam-stock-alert-script">
+const ADAM_STOCK_NOTIFICATION_MODE_KEY='adam_v701_stock_notification_mode';
+const ADAM_STOCK_VOICE_KEY='adam_v701_stock_voice_enabled';
+const ADAM_STOCK_SEEN_SIGNALS_KEY='adam_v8001_stock_seen_signals';
+const ADAM_STOCK_LAST_STATUS_KEY='adam_v701_stock_last_status_map';
+
+function adamStockNotificationMode(){
+  const el=document.getElementById('stockNotificationMode');
+  return (el&&el.value)||localStorage.getItem(ADAM_STOCK_NOTIFICATION_MODE_KEY)||'once_per_signal';
+}
+function adamStockVoiceEnabled(){
+  const el=document.getElementById('stockVoiceAlerts');
+  return el ? !!el.checked : localStorage.getItem(ADAM_STOCK_VOICE_KEY)!=='false';
+}
+function adamSpeakStockAlert(text){
+  try{
+    if(!adamStockVoiceEnabled()) return;
+    if(adamStockNotificationMode()==='off') return;
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.rate=.95;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+function adamStockAlertKey(alert){
+  // v8.0.0.1: prices and percentages belong in the display, not the identity.
+  // A changing reason must not turn the same SYMBOL + ACTION into a new voice alert.
+  return [String(alert&&alert.symbol||'').trim().toUpperCase(),String(alert&&(alert.type||alert.action)||'ALERT').trim().toUpperCase()].join('|');
+}
+function adamReadSeenStockSignals(){
+  try{const value=JSON.parse(localStorage.getItem(ADAM_STOCK_SEEN_SIGNALS_KEY)||'[]');return Array.isArray(value)?value:[]}catch(e){return []}
+}
+function adamWriteSeenStockSignals(keys){
+  localStorage.setItem(ADAM_STOCK_SEEN_SIGNALS_KEY,JSON.stringify([...new Set(keys)].slice(-200)));
+}
+function adamStockStatusMap(alerts){
+  const out={};
+  (alerts||[]).forEach(a=>{const symbol=String(a.symbol||'').toUpperCase(); if(symbol) out[symbol]=String(a.type||a.action||'ALERT').toUpperCase();});
+  return out;
+}
+function adamStatusChanged(previous,current){
+  const keys=new Set([...Object.keys(previous||{}),...Object.keys(current||{})]);
+  for(const k of keys){if((previous||{})[k]!== (current||{})[k]) return true;}
+  return false;
+}
+function adamStockAlertsToNotify(alerts){
+  const mode=adamStockNotificationMode();
+  if(mode==='off'||!(alerts||[]).length) return [];
+  if(mode==='every_check') return alerts;
+  if(mode==='status_change'){
+    let prev={}; try{prev=JSON.parse(localStorage.getItem(ADAM_STOCK_LAST_STATUS_KEY)||'{}')}catch(e){}
+    const current=adamStockStatusMap(alerts);
+    const changed=adamStatusChanged(prev,current);
+    localStorage.setItem(ADAM_STOCK_LAST_STATUS_KEY,JSON.stringify(current));
+    return changed?alerts:[];
+  }
+  const seen=adamReadSeenStockSignals();
+  const seenSet=new Set(seen);
+  const fresh=alerts.filter(a=>!seenSet.has(adamStockAlertKey(a)));
+  if(fresh.length) adamWriteSeenStockSignals(seen.concat(fresh.map(adamStockAlertKey)));
+  return fresh;
+}
+function adamRenderStockAlerts(data){
+  const list=document.getElementById('stockAlertList'); if(!list)return;
+  const alerts=(data&&data.alerts)||[];
+  if(!alerts.length){
+    list.innerHTML='<div class="stock-alert stock-alert-none">No urgent BUY or SELL alert right now.</div>';
+    // v7.0.1: deliberately do NOT clear persisted last signal here.
+    // A temporary no-alert cycle must not make the same alert speak again.
+    return;
+  }
+  list.innerHTML=alerts.map(a=>{
+    const type=String(a.type||a.action||'ALERT').toUpperCase();
+    const cls=(type==='BUY')?'stock-alert-buy':'stock-alert-sell';
+    return `<div class="stock-alert ${cls}"><strong>${type}: ${a.symbol||''}</strong><br>${a.reason||''}</div>`;
+  }).join('');
+  const voiceAlerts=adamStockAlertsToNotify(alerts);
+  if(voiceAlerts.length){
+    adamSpeakStockAlert('Adam stock alert. '+voiceAlerts.map(a=>`${a.type||a.action}. ${a.symbol}. ${a.reason}`).join(' '));
+  }
+}
+function adamInitStockNotificationControls(){
+  const mode=document.getElementById('stockNotificationMode');
+  const voice=document.getElementById('stockVoiceAlerts');
+  const hint=document.getElementById('stockNotificationHint');
+  if(mode){
+    mode.value=localStorage.getItem(ADAM_STOCK_NOTIFICATION_MODE_KEY)||'once_per_signal';
+    mode.onchange=()=>{
+      localStorage.setItem(ADAM_STOCK_NOTIFICATION_MODE_KEY,mode.value);
+      if(hint) hint.textContent=mode.value==='off'?'Stock notifications are off; dashboard data still refreshes.':mode.value==='every_check'?'Repeated alerts are explicitly enabled for every stock check.':mode.value==='status_change'?'Notify only when an important symbol status changes.':'Notify once for a new important signal; temporary no-alert cycles do not re-arm the same signal.';
+    };
+  }
+  if(voice){
+    voice.checked=localStorage.getItem(ADAM_STOCK_VOICE_KEY)!=='false';
+    voice.onchange=()=>localStorage.setItem(ADAM_STOCK_VOICE_KEY,String(voice.checked));
+  }
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',adamInitStockNotificationControls); else adamInitStockNotificationControls();
+</script>
+<div id="adamStockPopup" class="adam-stock-popup" role="status" aria-live="polite">
+  <strong>Adam Stock Alert</strong>
+  <div id="adamStockPopupText"></div>
+</div>
+
+
+<script id="adam-main-stock-status-v06915">
+(function(){
+  let lastImportant = localStorage.getItem('adam_v8001_stock_visual_alert') || '';
+  let lastRegime = localStorage.getItem('adam_v06915_regime') || '';
+
+  function safe(v){return v===undefined||v===null?'':String(v)}
+  function popup(message){
+    const p=document.getElementById('adamStockPopup');
+    const t=document.getElementById('adamStockPopupText');
+    if(!p||!t)return;
+    t.textContent=message;
+    p.classList.add('show');
+    setTimeout(()=>p.classList.remove('show'),9000);
+  }
+  function adamMessage(message){
+    try{
+      if(typeof add==='function') add('assistant',message);
+      else{
+        const chat=document.getElementById('chat');
+        if(!chat)return;
+        const d=document.createElement('div');
+        d.className='msg assistant';
+        d.textContent=message;
+        chat.appendChild(d);
+        chat.scrollTop=chat.scrollHeight;
+      }
+    }catch(e){}
+  }
+  function important(d){
+    const out=[];
+    (d.advice||[]).forEach(x=>{
+      const a=safe(x.action).toUpperCase();
+      if(['BUY','SELL','TAKE PROFIT','STOP LOSS','TAKE_PROFIT','STOP_LOSS'].includes(a)){
+        out.push([x.symbol,a,x.reason].filter(Boolean).join(' — '));
+      }
+    });
+    return [...new Set(out)].slice(0,5);
+  }
+  async function checkMainStockStatus(){
+    try{
+      const r=await fetch('/api/stock/main-summary',{cache:'no-store'});
+      const d=await r.json();
+      if(!r.ok||!d.ok) throw new Error(d.error||'Stock check failed');
+
+      const regime=safe(d.market_regime||'UNKNOWN').toUpperCase();
+      const badge=document.getElementById('adamMainMarketBadge');
+      if(badge) badge.textContent=(d.market_open?'OPEN':'CLOSED')+' • '+regime;
+
+      const line=document.getElementById('adamMainStockLine');
+      if(line){
+        const pv=Number(d.account?.portfolio_value);
+        const pl=Number(d.account?.today_pl);
+        const parts=['Market '+regime];
+        if(Number.isFinite(pv)) parts.push('Portfolio $'+pv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+        if(Number.isFinite(pl)) parts.push('Today P/L '+(pl>=0?'+':'-')+'$'+Math.abs(pl).toFixed(2));
+        line.textContent=parts.join(' • ');
+      }
+
+      const alerts=important(d);
+      const alertLine=document.getElementById('adamMainStockAlertLine');
+      if(alertLine) alertLine.textContent=alerts.length?alerts[0]:'No urgent BUY or SELL alert.';
+
+      const sig=alerts.map(item=>{
+        const parts=item.split(' — ');
+        return [safe(parts[0]).trim().toUpperCase(),safe(parts[1]).trim().toUpperCase()].join('|');
+      }).sort().join('||');
+      if(alerts.length && sig!==lastImportant){
+        lastImportant=sig;
+        localStorage.setItem('adam_v8001_stock_visual_alert',sig);
+        const msg='🚨 Stock alert: '+alerts.join(' | ');
+        popup(msg);
+        adamMessage(msg);
+      }
+
+      if(lastRegime && regime!=='UNKNOWN' && regime!==lastRegime){
+        const msg='📈 Market condition changed from '+lastRegime+' to '+regime+'.';
+        popup(msg);
+        adamMessage(msg);
+      }
+      if(regime!=='UNKNOWN'){
+        lastRegime=regime;
+        localStorage.setItem('adam_v06915_regime',regime);
+      }
+    }catch(e){
+      const line=document.getElementById('adamMainStockLine');
+      if(line) line.textContent='Stock status unavailable: '+e.message;
+    }
+  }
+
+  checkMainStockStatus();
+  setInterval(checkMainStockStatus,120000);
+})();
+</script>
+
+</body></html>

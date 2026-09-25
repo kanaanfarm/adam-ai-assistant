@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Adam {{ version }} — Personal Context & Memory</title>
+  <style>
+    body{font-family:Arial;background:#f4f7fb;margin:0;padding:24px}.wrap{max-width:900px;margin:auto}.card{background:#fff;border:1px solid #dbe2ea;border-radius:14px;padding:18px;margin-bottom:16px}input,select,textarea{width:100%;box-sizing:border-box;margin:6px 0 12px;padding:9px}textarea{min-height:90px}button{background:#10233d;color:#fff;border:0;border-radius:5px;padding:9px 13px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}pre{white-space:pre-wrap;background:#f7f9fc;padding:12px;border-radius:8px;min-height:44px}.hint{font-size:13px;color:#52606d}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Adam {{ version }} — Persistent Personal Context & Memory</h2>
+    <p>Store only owner-approved context. Credentials, tokens, passwords and secrets are rejected.</p>
+    <label for="memoryCategory">Category</label>
+    <select id="memoryCategory"><option>project_context</option><option>preference</option><option>contact_context</option><option>followup</option></select>
+    <label for="memoryTitle">Title</label>
+    <input id="memoryTitle" value="Payment letter follow-up">
+    <label for="memoryValue">Context</label>
+    <textarea id="memoryValue">Contractor latest payment letter requires follow-up.</textarea>
+    <label><input id="ownerApproved" type="checkbox" style="width:auto"> Owner Approval</label>
+    <p>
+      <button id="rememberBtn" type="button">Remember</button>
+      <button id="recallBtn" type="button">Recall Memory</button>
+    </p>
+    <p class="hint">Remember requires Owner Approval. Recall is read-only.</p>
+  </div>
+  <div class="card"><h3>Memory Result</h3><pre id="memoryResult">Ready.</pre></div>
+</div>
+<script>
+(function(){
+  const categoryEl = document.getElementById('memoryCategory');
+  const titleEl = document.getElementById('memoryTitle');
+  const valueEl = document.getElementById('memoryValue');
+  const approvedEl = document.getElementById('ownerApproved');
+  const rememberBtn = document.getElementById('rememberBtn');
+  const recallBtn = document.getElementById('recallBtn');
+  const resultEl = document.getElementById('memoryResult');
+
+  async function readJsonResponse(response){
+    let data;
+    try { data = await response.json(); }
+    catch (_) { throw new Error('Adam returned a non-JSON response (HTTP ' + response.status + ').'); }
+    if (!response.ok && !data.error) data.error = 'HTTP ' + response.status;
+    return data;
+  }
+
+  async function rememberContext(){
+    rememberBtn.disabled = true;
+    resultEl.textContent = 'Saving memory...';
+    try {
+      const payload = {
+        category: categoryEl.value,
+        title: titleEl.value,
+        value: valueEl.value,
+        owner_approved: approvedEl.checked
+      };
+      const response = await fetch('/api/personal-assistant/context-memory/remember', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      });
+      resultEl.textContent = JSON.stringify(await readJsonResponse(response), null, 2);
+    } catch (err) {
+      resultEl.textContent = JSON.stringify({ok:false,status:'ui_request_failed',error:String(err && err.message ? err.message : err)}, null, 2);
+    } finally {
+      rememberBtn.disabled = false;
+    }
+  }
+
+  async function recallContext(){
+    recallBtn.disabled = true;
+    resultEl.textContent = 'Recalling memory...';
+    try {
+      const category = encodeURIComponent(categoryEl.value || '');
+      const response = await fetch('/api/personal-assistant/context-memory/recall?category=' + category, {method:'GET'});
+      resultEl.textContent = JSON.stringify(await readJsonResponse(response), null, 2);
+    } catch (err) {
+      resultEl.textContent = JSON.stringify({ok:false,status:'ui_request_failed',error:String(err && err.message ? err.message : err)}, null, 2);
+    } finally {
+      recallBtn.disabled = false;
+    }
+  }
+
+  rememberBtn.addEventListener('click', rememberContext);
+  recallBtn.addEventListener('click', recallContext);
+})();
+</script>
+</body>
+</html>

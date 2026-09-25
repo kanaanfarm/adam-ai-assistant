@@ -1,0 +1,237 @@
+--- /mnt/data/adam8412/app.py	2026-09-09 20:41:23.000000000 +0000
++++ /mnt/data/adam8413/app.py	2026-09-10 05:04:34.088277487 +0000
+@@ -188,7 +188,7 @@
+ from adam_core.meeting_language_policy import DEFAULT_REPLY_LANGUAGE, detect_requested_reply_language, tts_locale_for_reply, professional_scope_prompt
+ from adam_core.meeting_focus_engine import evaluate_meeting_focus, detect_explicit_project_mismatch, self_test as meeting_focus_self_test
+ 
+-VERSION = "v8.4.1.2"
++VERSION = "v8.4.1.3"
+ BASELINE_VERSION = "v0.8.0.1"
+ BUILD_CHANNEL = "acquisition"
+ 
+--- /mnt/data/adam8412/adam_core/ai_provider_transport.py	2026-09-09 20:41:23.000000000 +0000
++++ /mnt/data/adam8413/adam_core/ai_provider_transport.py	2026-09-10 05:04:34.359143890 +0000
+@@ -1,30 +1,37 @@
+ """Text AI provider transport boundary for Adam Acquisition.
+ 
+-Constructs OpenAI-compatible chat-completion requests and executes them through
+-an injected HTTP provider. This module does not persist credentials, prompts,
+-or model responses.
++Constructs OpenAI-compatible text requests and executes them through an injected
++HTTP provider. GPT-5 family models on the official OpenAI API use the Responses
++API; legacy/custom OpenAI-compatible providers continue to use Chat Completions.
++This module does not persist credentials, prompts, or model responses.
+ """
+ 
+ class AIProviderTransportError(RuntimeError):
+     pass
+ 
+ 
++def _normalized_limit(max_tokens=1200):
++    return max(1, min(int(max_tokens or 1200), 8192))
++
++
++def _system_text(language, master_prompt):
++    return (
++        str(master_prompt or "").strip() + "\n\n"
++        "For this request, respond in " + str(language or "English") + ". "
++        "When the user asks for translation, return an accurate natural translation without changing the meaning."
++    ).strip()
++
++
+ def build_chat_payload(prompt, language, model, master_prompt, max_tokens=1200):
+     text = "" if prompt is None else str(prompt).strip()
+     if not text:
+         raise AIProviderTransportError("AI instruction is empty.")
+-    language = str(language or "English")
+     model = str(model or "gpt-4o-mini").strip() or "gpt-4o-mini"
+-    system = (
+-        str(master_prompt or "").strip() + "\n\n"
+-        "For this request, respond in " + language + ". "
+-        "When the user asks for translation, return an accurate natural translation without changing the meaning."
+-    ).strip()
+     payload = {"model": model, "messages": [
+-        {"role": "system", "content": system},
++        {"role": "system", "content": _system_text(language, master_prompt)},
+         {"role": "user", "content": text},
+     ]}
+-    limit = max(1, min(int(max_tokens or 1200), 8192))
++    limit = _normalized_limit(max_tokens)
+     if model.lower().startswith("gpt-5"):
+         payload["max_completion_tokens"] = limit
+     else:
+@@ -32,24 +39,20 @@
+     return payload
+ 
+ 
+-def complete_text(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens=1200, timeout=60):
+-    key = str(api_key or "").strip()
+-    if not key:
+-        raise AIProviderTransportError("AI API key is missing. Open AI Settings and save the provider URL, API key and model.")
+-    payload = build_chat_payload(prompt, language, model, master_prompt, max_tokens=max_tokens)
+-    url = str(api_base or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
+-    r = http.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, json=payload, timeout=timeout)
+-    if not getattr(r, "ok", False):
+-        raise AIProviderTransportError(f"AI provider error {getattr(r, 'status_code', 'unknown')}: {str(getattr(r, 'text', ''))[:300]}")
+-    try:
+-        data = r.json()
+-        answer = str((((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "")).strip()
+-    except Exception as exc:
+-        raise AIProviderTransportError("AI provider returned invalid JSON.") from exc
+-    if not answer:
+-        raise AIProviderTransportError("AI provider returned an empty result.")
+-    return answer
+-
++def build_responses_payload(prompt, language, model, master_prompt, max_tokens=1200, reasoning_effort="low"):
++    text = "" if prompt is None else str(prompt).strip()
++    if not text:
++        raise AIProviderTransportError("AI instruction is empty.")
++    selected_model = str(model or "gpt-5.6").strip() or "gpt-5.6"
++    payload = {
++        "model": selected_model,
++        "instructions": _system_text(language, master_prompt),
++        "input": text,
++        "max_output_tokens": _normalized_limit(max_tokens),
++    }
++    if selected_model.lower().startswith("gpt-5") and reasoning_effort:
++        payload["reasoning"] = {"effort": str(reasoning_effort)}
++    return payload
+ 
+ 
+ def _extract_responses_text(data):
+@@ -61,25 +64,89 @@
+         return direct
+     parts = []
+     for item in data.get("output") or []:
+-        if not isinstance(item, dict):
+-            continue
+-        if item.get("type") != "message":
++        if not isinstance(item, dict) or item.get("type") != "message":
+             continue
+         for content in item.get("content") or []:
+             if not isinstance(content, dict):
+                 continue
+             if content.get("type") in {"output_text", "text"}:
+-                text = str(content.get("text") or "").strip()
++                text = content.get("text")
++                if isinstance(text, dict):
++                    text = text.get("value") or text.get("text") or ""
++                text = str(text or "").strip()
+                 if text:
+                     parts.append(text)
+     return "\n".join(parts).strip()
+ 
+ 
++def _is_official_openai(api_base):
++    return "api.openai.com" in str(api_base or "").lower()
++
++
++def _post_chat(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens, timeout):
++    payload = build_chat_payload(prompt, language, model, master_prompt, max_tokens=max_tokens)
++    url = str(api_base or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
++    r = http.post(url, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json=payload, timeout=timeout)
++    if not getattr(r, "ok", False):
++        raise AIProviderTransportError(f"AI provider chat error {getattr(r, 'status_code', 'unknown')}: {str(getattr(r, 'text', ''))[:300]}")
++    try:
++        data = r.json()
++        answer = str((((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "")).strip()
++    except Exception as exc:
++        raise AIProviderTransportError("AI provider returned invalid Chat Completions JSON.") from exc
++    if not answer:
++        raise AIProviderTransportError("AI provider returned an empty Chat Completions result.")
++    return answer
++
++
++def _post_responses(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens, timeout):
++    payload = build_responses_payload(prompt, language, model, master_prompt, max_tokens=max_tokens, reasoning_effort="low")
++    url = str(api_base or "https://api.openai.com/v1").rstrip("/") + "/responses"
++    r = http.post(url, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json=payload, timeout=timeout)
++    if not getattr(r, "ok", False):
++        err = AIProviderTransportError(f"AI provider Responses error {getattr(r, 'status_code', 'unknown')}: {str(getattr(r, 'text', ''))[:300]}")
++        err.status_code = getattr(r, "status_code", None)
++        raise err
++    try:
++        data = r.json()
++    except Exception as exc:
++        raise AIProviderTransportError("AI provider returned invalid Responses API JSON.") from exc
++    answer = _extract_responses_text(data)
++    if not answer:
++        raise AIProviderTransportError("AI provider returned an empty Responses API result.")
++    return answer
++
++
++def complete_text(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens=1200, timeout=60):
++    """Complete a text request using the provider path appropriate to the model.
++
++    Official OpenAI GPT-5.x models use /responses. This avoids the old meeting
++    failure where Adam sent GPT-5.6 through /chat/completions and could remain
++    waiting without a usable meeting reply. Custom OpenAI-compatible providers
++    retain the legacy chat path for compatibility.
++    """
++    key = str(api_key or "").strip()
++    if not key:
++        raise AIProviderTransportError("AI API key is missing. Open AI Settings and save the provider URL, API key and model.")
++    selected_model = str(model or "gpt-4o-mini").strip() or "gpt-4o-mini"
++    base = str(api_base or "https://api.openai.com/v1").rstrip("/")
++    if selected_model.lower().startswith("gpt-5") and _is_official_openai(base):
++        try:
++            return _post_responses(base, key, selected_model, prompt, language, master_prompt, http=http, max_tokens=max_tokens, timeout=timeout)
++        except AIProviderTransportError as exc:
++            # Compatibility escape hatch only when the provider explicitly says the
++            # endpoint is not present/method not allowed. Do not hide auth, quota,
++            # model-access, validation, or server errors behind a second request.
++            if getattr(exc, "status_code", None) not in {404, 405, 501}:
++                raise
++    return _post_chat(base, key, selected_model, prompt, language, master_prompt, http=http, max_tokens=max_tokens, timeout=timeout)
++
++
+ def complete_text_with_web_search(api_base, api_key, model, prompt, language, master_prompt, *, http, max_tokens=1600, timeout=90):
+     """Use the OpenAI Responses API with web_search, without persisting provider data.
+ 
+-    Returns (answer, metadata). The caller can fall back to chat-completions when
+-    the configured provider/model does not support Responses web search.
++    Returns (answer, metadata). The caller can fall back to normal text completion
++    when the configured provider/model does not support Responses web search.
+     """
+     key = str(api_key or "").strip()
+     if not key:
+@@ -99,8 +166,10 @@
+         "instructions": system,
+         "input": text,
+         "tools": [{"type": "web_search"}],
+-        "max_output_tokens": max(1, min(int(max_tokens or 1600), 8192)),
++        "max_output_tokens": _normalized_limit(max_tokens),
+     }
++    if selected_model.lower().startswith("gpt-5"):
++        payload["reasoning"] = {"effort": "low"}
+     url = str(api_base or "https://api.openai.com/v1").rstrip("/") + "/responses"
+     r = http.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, json=payload, timeout=timeout)
+     if not getattr(r, "ok", False):
+--- /mnt/data/adam8412/templates/real_meeting_attendance.html	2026-09-09 20:41:32.000000000 +0000
++++ /mnt/data/adam8413/templates/real_meeting_attendance.html	2026-09-10 05:05:07.680606312 +0000
+@@ -593,16 +593,20 @@
+  const context=transcript.value.slice(-6000);
+  let r,j;
+  setMeetingReplyTrace(3,'waiting for AI provider',questionId);
++ let providerWatchdog=null;const providerController=(typeof AbortController!=='undefined')?new AbortController():null;
+  try{
+-  r=await fetch('/api/personal-assistant/meeting-conversation/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,question_id:questionId,direct_question:directQuestion,turn_kind:turnKind,response_required:responseRequired,meeting_context:context,messages:meetingConversationHistory.slice(-10),session_id:meetingConversationSessionId,owner_approved:sessionApproved,representative_mode:representativeMode,owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',authority_profile:(document.getElementById('authorityProfile')||{}).value||'',professional_scope:(document.getElementById('professionalScope')||{}).value||'auto',participation_style:(document.getElementById('participationStyle')||{}).value||'balanced',proactive_reason:proactiveInterventionReason(question),meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',focus_locked:meetingFocusLocked(),focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',continuity_memory:document.getElementById('meetingContinuityMemory').checked,language:document.getElementById('meetingLanguage').value})});
++  if(providerController)providerWatchdog=setTimeout(()=>providerController.abort(),30000);
++  r=await fetch('/api/personal-assistant/meeting-conversation/ask',{method:'POST',headers:{'Content-Type':'application/json'},signal:providerController?providerController.signal:undefined,body:JSON.stringify({question,question_id:questionId,direct_question:directQuestion,turn_kind:turnKind,response_required:responseRequired,meeting_context:context,messages:meetingConversationHistory.slice(-10),session_id:meetingConversationSessionId,owner_approved:sessionApproved,representative_mode:representativeMode,owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',authority_profile:(document.getElementById('authorityProfile')||{}).value||'',professional_scope:(document.getElementById('professionalScope')||{}).value||'auto',participation_style:(document.getElementById('participationStyle')||{}).value||'balanced',proactive_reason:proactiveInterventionReason(question),meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',focus_locked:meetingFocusLocked(),focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',continuity_memory:document.getElementById('meetingContinuityMemory').checked,language:document.getElementById('meetingLanguage').value})});
+   j=await r.json().catch(()=>({}));
+- }catch(e){j={};r={ok:false};}
++ }catch(e){const aborted=!!(e&&e.name==='AbortError');j={status:aborted?'client_ai_provider_timeout':'meeting_ai_request_failed',error:String(e&&e.message||e)};r={ok:false};}
++ finally{if(providerWatchdog)clearTimeout(providerWatchdog);}
+  if(j&&j.session_id)meetingConversationSessionId=j.session_id;if(j&&j.question_coverage)renderQuestionCoverage(j.question_coverage);
+  if(!r.ok){
+   if(j&&j.duplicate_suppressed){status.textContent='Conversation: duplicate participant turn suppressed — waiting for the original Adam response';return true;}
+-  if(j&&j.status==='ai_provider_timeout'){setMeetingReplyTrace(4,'AI provider timeout — question retained',questionId);status.textContent='Conversation: AI provider timed out — the accepted question is retained as unanswered; retry when the provider is ready';return false;}
+-  if(representativeMode&&responseRequired&&attempt<1){status.textContent='Conversation: temporary response failure — Adam is retrying once…';await sleepMeeting(900);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired});}
+-  status.textContent='Conversation: direct question retained as unanswered — please retry or repeat';return false;
++  if(j&&(j.status==='ai_provider_timeout'||j.status==='client_ai_provider_timeout')){setMeetingReplyTrace(4,'AI provider timeout — question retained',questionId);status.textContent='Conversation: AI provider timed out — question retained. Open AI Settings and run Test AI Connection before repeating it.';document.getElementById('out').textContent='AI provider timeout. The accepted meeting question was retained; no duplicate was created.';return false;}
++  if(j&&j.status==='ai_provider_error'){setMeetingReplyTrace(4,'AI provider error — question retained',questionId);status.textContent='Conversation: AI provider error — question retained. Open AI Settings and run Test AI Connection.';document.getElementById('out').textContent='AI provider error: '+String(j.error||'unknown provider error');return false;}
++  if(representativeMode&&responseRequired&&attempt<1&&j&&j.status!=='meeting_ai_request_failed'){status.textContent='Conversation: temporary response failure — Adam is retrying once…';await sleepMeeting(900);return runInteractiveConversation(question,{questionId,attempt:attempt+1,directQuestion,turnKind,responseRequired});}
++  setMeetingReplyTrace(4,'AI request failed — question retained',questionId);status.textContent='Conversation: direct question retained as unanswered — check AI Settings / connection, then retry';return false;
+  }
+  if(j.attention_hold){armMeetingAddressHold(j.question_preamble?'Question preamble heard':'Adam heard his name');return true;}
+  if(j.project_mismatch_filtered){status.textContent='Conversation: explicit other-project speech filtered — no answer and no meeting-memory entry';return true;}

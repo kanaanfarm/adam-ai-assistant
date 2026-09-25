@@ -1,0 +1,6 @@
+Adam Acquisition v8.4.1.12.1 verification
+- New compatibility tests: 5/5 PASS
+- v8.4.1.12 fast-path regression tests: 10/10 PASS
+- Python compile: PASS
+- Meeting page JavaScript syntax: PASS
+- ZIP integrity: checked after packaging

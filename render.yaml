@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: adam-acquisition-test
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn render_wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    envVars:
+      - key: ADAM_OWNER_PASSWORD
+        sync: false
+      - key: ADAM_OWNER_USER
+        value: adam

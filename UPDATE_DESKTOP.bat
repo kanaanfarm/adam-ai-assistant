@@ -1,0 +1,4 @@
+@echo off
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0desktop\install.ps1" -Update
+pause

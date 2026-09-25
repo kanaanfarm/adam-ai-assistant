@@ -1,0 +1,14 @@
+PASS version
+PASS report reconcile wired
+PASS api guard exposed
+PASS no participant action forced
+PASS next steps disclaimer
+PASS participant count zero
+PASS adam recommendation count
+PASS consistency true
+PASS participant action rendered
+PASS participant count one
+PASS no false disclaimer
+PASS adjacent section preserved
+Python compile: PASS
+JavaScript syntax: PASS

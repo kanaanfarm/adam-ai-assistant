@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meeting Assistant</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#172033;--muted:#697386;--line:#d9dee7;--dark:#111827;--good:#067647;--bad:#b42318;--warn:#b54708}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1050px;margin:28px auto;padding:0 18px}
+.header,.card{background:var(--card);border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 6px 18px rgba(17,24,39,.04)}
+.header{padding:20px 22px;margin-bottom:16px}
+.card{padding:20px 22px;margin-bottom:16px}
+h1{margin:0 0 8px;font-size:28px}
+h2{margin:0 0 16px;font-size:19px}
+.small{font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.full{grid-column:1/-1}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+input,textarea,select{width:100%;padding:11px 12px;border:1px solid #cbd2dc;border-radius:8px;font:inherit;background:#fff}
+textarea{min-height:110px;resize:vertical}
+button,a.btn{border:1px solid #c8ced8;border-radius:8px;padding:10px 14px;background:#fff;color:var(--text);text-decoration:none;cursor:pointer;font-weight:600}
+button.primary{background:var(--dark);color:#fff;border-color:var(--dark)}
+button:disabled{opacity:.55;cursor:not-allowed}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.preview{background:#f8fafc;border:1px solid #e3e8ef;border-radius:10px;padding:14px}
+.preview-row{display:grid;grid-template-columns:150px 1fr;gap:8px;padding:5px 0}
+.preview-row b{color:#374151}
+.status{padding:12px 14px;border-radius:9px;margin-top:12px;display:none}
+.status.good{display:block;background:#ecfdf3;color:var(--good);border:1px solid #abefc6;font-weight:700}
+.status.bad{display:block;background:#fef3f2;color:var(--bad);border:1px solid #fecdca;font-weight:700}
+.status.warn{display:block;background:#fffaeb;color:var(--warn);border:1px solid #fedf89;font-weight:700}
+.checkbox{display:flex;gap:8px;align-items:center;font-size:14px}
+.checkbox input{width:auto}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.preview-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Meeting Assistant</h1>
+    <div class="small">Professional meeting planning and Outlook calendar creation with owner approval.</div>
+    <div class="actions" style="margin-top:14px">
+      <a class="btn" href="/">← Back to Assistant</a>
+      <a class="btn" href="/contacts">Contacts</a>
+      <a class="btn" href="/microsoft">Microsoft Outlook</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. Describe the meeting</h2>
+    <label>Instruction</label>
+    <textarea id="instruction" placeholder="Example: Arrange a meeting with Buyer Test tomorrow at 10:00 AM for HVAC coordination."></textarea>
+    <div class="actions">
+      <button class="primary" id="draftBtn">Prepare Meeting</button>
+      <span id="draftInfo" class="small"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Meeting details</h2>
+    <div class="grid">
+      <div class="full">
+        <label>Meeting title</label>
+        <input id="title" placeholder="Meeting title">
+      </div>
+      <div>
+        <label>Attendee name</label>
+        <input id="attendeeName" placeholder="Saved contact name">
+      </div>
+      <div>
+        <label>Attendee email</label>
+        <input id="attendeeEmail" type="email" placeholder="name@example.com">
+      </div>
+      <div>
+        <label>Date</label>
+        <input id="date" type="date">
+      </div>
+      <div>
+        <label>Start time</label>
+        <input id="startTime" type="time">
+      </div>
+      <div>
+        <label>Duration</label>
+        <select id="duration">
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="90">1 hour 30 minutes</option>
+          <option value="120">2 hours</option>
+        </select>
+      </div>
+      <div>
+        <label>Location</label>
+        <input id="location" placeholder="Office / Meeting Room / Site">
+      </div>
+      <div class="full">
+        <label>Agenda / Notes</label>
+        <textarea id="agenda" placeholder="Meeting purpose, discussion points and expected outcome"></textarea>
+      </div>
+      <div class="full checkbox">
+        <input id="online" type="checkbox">
+        <label for="online" style="margin:0">Create as an online Microsoft Teams meeting</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. Review before creating</h2>
+    <div class="preview">
+      <div class="preview-row"><b>Organizer</b><span>{{ sender_label or "Connected Outlook account" }}</span></div>
+      <div class="preview-row"><b>Attendee</b><span id="pAttendee">Not selected</span></div>
+      <div class="preview-row"><b>Title</b><span id="pTitle">Not entered</span></div>
+      <div class="preview-row"><b>Date & time</b><span id="pDate">Not selected</span></div>
+      <div class="preview-row"><b>Location</b><span id="pLocation">Not entered</span></div>
+    </div>
+
+    <div class="checkbox" style="margin-top:15px">
+      <input id="approve" type="checkbox">
+      <label for="approve" style="margin:0">I approve creating and sending this meeting invitation now</label>
+    </div>
+
+    <div class="actions" style="margin-top:14px">
+      <button class="primary" id="createBtn">Create Meeting in Outlook</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+</div>
+
+<script>
+const q=id=>document.getElementById(id);
+let meetingCreated=false;
+
+function updatePreview(){
+  q('pAttendee').textContent=(q('attendeeName').value||q('attendeeEmail').value||'Not selected')+(q('attendeeEmail').value?' — '+q('attendeeEmail').value:'');
+  q('pTitle').textContent=q('title').value||'Not entered';
+  q('pLocation').textContent=q('online').checked?'Microsoft Teams':(q('location').value||'Not entered');
+  if(q('date').value && q('startTime').value){
+    q('pDate').textContent=q('date').value+' at '+q('startTime').value+' ('+q('duration').selectedOptions[0].text+')';
+  }else q('pDate').textContent='Not selected';
+}
+
+['title','attendeeName','attendeeEmail','date','startTime','duration','location','agenda','online'].forEach(id=>{
+  q(id).addEventListener('input',()=>{meetingCreated=false;updatePreview()});
+  q(id).addEventListener('change',()=>{meetingCreated=false;updatePreview()});
+});
+
+q('draftBtn').onclick=async()=>{
+  const info=q('draftInfo');
+  info.textContent='Preparing professional meeting details…';
+  try{
+    const r=await fetch('/api/meeting-draft',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({instruction:q('instruction').value})
+    });
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'Could not prepare meeting');
+    q('title').value=d.title||'';
+    q('agenda').value=d.agenda||'';
+    q('location').value=d.location||'';
+    q('duration').value=String(d.duration_minutes||30);
+    q('attendeeName').value=d.contact_name||'';
+    q('attendeeEmail').value=d.attendee_email||'';
+    if(d.date) q('date').value=d.date;
+    if(d.start_time) q('startTime').value=d.start_time;
+    let msg=d.contact_name?'Contact found: '+d.contact_name:'Meeting prepared. Add attendee if needed.';
+    if(d.date||d.start_time){
+      msg+=' — ';
+      if(d.date) msg+='Date: '+d.date;
+      if(d.start_time) msg+=(d.date?' • ':'')+'Time: '+d.start_time;
+    }
+    info.textContent=msg;
+    updatePreview();
+  }catch(e){info.textContent='Error: '+e.message}
+};
+
+q('createBtn').onclick=async()=>{
+  const status=q('status');
+  status.className='status';
+  status.textContent='';
+
+  if(meetingCreated){
+    status.className='status warn';
+    status.textContent='This meeting was already created. Edit the details before creating another one.';
+    return;
+  }
+
+  if(!q('approve').checked){
+    status.className='status bad';
+    status.textContent='Please approve the meeting before creating it.';
+    return;
+  }
+
+  if(!q('title').value.trim() || !q('date').value || !q('startTime').value){
+    status.className='status bad';
+    status.textContent='Meeting title, date and start time are required.';
+    return;
+  }
+
+  const start=new Date(q('date').value+'T'+q('startTime').value+':00');
+  const end=new Date(start.getTime()+Number(q('duration').value)*60000);
+  const localISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':00';
+
+  const attendee=q('attendeeEmail').value.trim();
+  const confirmText='Create "'+q('title').value+'" on '+q('date').value+' at '+q('startTime').value+(attendee?' and invite '+attendee:'')+'?';
+  if(!confirm(confirmText))return;
+
+  const btn=q('createBtn');
+  btn.disabled=true;
+  status.className='status warn';
+  status.textContent='Creating meeting in Outlook…';
+
+  try{
+    const r=await fetch('/api/create-meeting',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        approved:true,
+        title:q('title').value,
+        start:localISO(start),
+        end:localISO(end),
+        attendee_name:q('attendeeName').value,
+        attendee_email:attendee,
+        location:q('location').value,
+        agenda:q('agenda').value,
+        is_online:q('online').checked
+      })
+    });
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'Meeting creation failed');
+    meetingCreated=true;
+    q('approve').checked=false;
+    status.className='status good';
+    status.textContent='✓ Meeting created successfully in Outlook Calendar.';
+    if(d.online_join_url){
+      status.innerHTML+=' <a href="'+d.online_join_url+'" target="_blank">Open Teams meeting</a>';
+    }
+  }catch(e){
+    status.className='status bad';
+    status.textContent='Error: '+e.message;
+  }finally{
+    btn.disabled=false;
+  }
+};
+
+updatePreview();
+</script>
+</body>
+</html>

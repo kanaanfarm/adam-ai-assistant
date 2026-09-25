@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Settings - {{ app_name }}</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f4f6;margin:0;color:#111827}
+.wrap{max-width:760px;margin:40px auto;background:white;padding:24px;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+h1{margin-top:0}.field{margin:16px 0}.field label{display:block;font-weight:700;margin-bottom:6px}
+input{width:100%;padding:12px;border:1px solid #bbb;border-radius:8px;font:inherit;box-sizing:border-box}
+button,a.btn{padding:10px 14px;border-radius:8px;border:1px solid #bbb;background:white;cursor:pointer;text-decoration:none;color:#111827;display:inline-block}
+button.primary{background:#111827;color:white;border-color:#111827}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.note{background:#f9fafb;border:1px solid #e5e7eb;padding:12px;border-radius:8px;color:#4b5563}
+#result{margin-top:14px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI Settings</h1>
+  <div class="note">
+    Enter your OpenAI API settings. Use the provider root URL (for OpenAI: https://api.openai.com/v1), not /chat/completions or /responses. Adam normalizes old endpoint URLs automatically. Your saved API key is stored in Adam's per-user local runtime folder so it survives extracted-folder upgrades and is never displayed in full.
+  </div>
+
+  <div class="field">
+    <label>Provider URL</label>
+    <input id="apiBase" value="{{ api_base }}" placeholder="https://api.openai.com/v1">
+  </div>
+
+  <div class="field">
+    <label>Model</label>
+    <input id="apiModel" value="{{ model }}" placeholder="gpt-5.6-terra">
+  </div>
+
+  <div class="field">
+    <label>API Key</label>
+    <input id="apiKey" type="password" placeholder="Enter a new key, or leave blank to keep saved key">
+    <div style="font-size:12px;color:#6b7280;margin-top:5px;">
+      {% if api_key_masked %}Saved key: {{ api_key_masked }}{% else %}No key saved yet.{% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <button class="primary" id="saveBtn">Save</button>
+    <button id="testBtn">Test Connection</button>
+    <a class="btn" href="/">Back to Assistant</a>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+async function postJson(url, body, timeoutMs=10000){
+  const c = new AbortController();
+  const t = setTimeout(()=>c.abort(), timeoutMs);
+  try{
+    const r = await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:body ? JSON.stringify(body) : undefined,
+      signal:c.signal
+    });
+    const d = await r.json();
+    return {r,d};
+  } finally { clearTimeout(t); }
+}
+
+const result=document.getElementById('result');
+
+document.getElementById('saveBtn').onclick=async()=>{
+  result.textContent='Saving...';
+  try{
+    const {r,d}=await postJson('/api/ai-settings',{
+      api_base:document.getElementById('apiBase').value,
+      model:document.getElementById('apiModel').value,
+      api_key:document.getElementById('apiKey').value
+    },8000);
+    result.textContent=(r.ok&&d.ok)?('Saved successfully. Provider root: '+(d.api_base_normalized||document.getElementById('apiBase').value)):'Error: '+(d.error||r.status);
+  }catch(e){
+    result.textContent='Save error: '+(e.name==='AbortError'?'request timed out':e.message);
+  }
+};
+
+document.getElementById('testBtn').onclick=async()=>{
+  result.textContent='Saving settings for test...';
+  try{
+    let x=await postJson('/api/ai-settings',{
+      api_base:document.getElementById('apiBase').value,
+      model:document.getElementById('apiModel').value,
+      api_key:document.getElementById('apiKey').value
+    },8000);
+    if(!(x.r.ok&&x.d.ok)){ result.textContent='Error: '+(x.d.error||x.r.status); return; }
+
+    result.textContent='Testing connection...';
+    x=await postJson('/api/ai-test',null,20000);
+    result.textContent=(x.r.ok&&x.d.ok)?'✓ '+x.d.reply:'Test error: '+(x.d.error||x.r.status);
+  }catch(e){
+    result.textContent='Test error: '+(e.name==='AbortError'?'request timed out':e.message);
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+Adam Acquisition v8.4.1.8 — Clarification Classification + New Meeting Context Isolation Fix
+
+Verification performed:
+- 13/13 new v8.4.1.8 targeted tests: PASS
+- app.py Python syntax/compile: PASS
+- real_meeting_attendance.html JavaScript syntax: PASS
+
+Key verified behavior:
+1. Under-specified chilled-water pump change + “Can they proceed?” => deterministic clarification required.
+2. Pump change with flow, head, approved reference and proposed submittal does not force clarification.
+3. Normal factual pump explanation does not force clarification.
+4. Material-change clarity gate runs before the provider call.
+5. Clarification follow-up remains response-required but is not automatically counted as a new direct question.
+6. Clarification parent id is retained for the same unresolved issue.
+7. Microphone chunks and browser-recognition results are bound to a meeting session epoch.
+8. Late AI responses from a prior meeting cannot rebind the new meeting session.
+9. End Meeting rotates the session after isolating prior queued work.
+10. Server closed-session tombstones reject late focus/note/ask callbacks.
+11. Client-history recovery is accepted only for the matching meeting session.
+12. Existing owner/consequential-action boundaries remain present.
+13. Previously approved owner acceptance paths were not re-run; they remain locked PASS unless affected.

@@ -1,0 +1,16 @@
+Adam Acquisition v8.4.1.7 — Meeting Approval-Status Consistency Fix
+
+Verification performed:
+- 6/6 v8.4.1.7 targeted approval-consistency tests: PASS
+- 5/5 affected v8.4.1.5 meeting-prompt regression tests (excluding historical version assertion): PASS
+- 9/9 affected v8.4.1.6 end-of-turn/technical-accuracy regression tests (excluding historical version assertion): PASS
+- app.py Python syntax/compile: PASS
+- real_meeting_attendance.html JavaScript syntax: PASS
+
+Key verified behavior:
+1. Explicit “before Mohamad approves it” => Owner approval required = Yes.
+2. Approval-gated chilled-water technical change => Owner approval required = Yes.
+3. Ordinary chilled-water technical explanation => Owner approval required = No.
+4. Report prompt treats retained owner-approval evidence as authoritative.
+5. Deterministic report uses the same governance evidence.
+6. Existing AI response, end-of-turn, and technical transcription behavior remains intact in affected regression checks.

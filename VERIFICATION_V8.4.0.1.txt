@@ -1,0 +1,23 @@
+Adam Acquisition v8.4.0.1 — Verification Summary
+
+New correction-isolation/context-precision tests: 5/5 PASS
+Preserved affected behavior checks: 21/21 PASS
+Correction guard internal self-test: PASS
+Python compile checks: PASS
+Real Meeting Attendance JavaScript syntax (Node --check): PASS
+
+Reported-case rule verified at logic level:
+- Fresh correction is detected.
+- Guard contains the exact corrected wording.
+- Guard does not import prior 100 mm / 125 mm sizes into the correction instruction.
+- Follow-up summaries retain the correction boundary.
+- Unrelated conversations do not activate the correction guard.
+
+Runtime note:
+The verification container does not have Flask installed, so a live Flask test-client request was not executed here. The package requirements.txt includes Flask>=3.0.0. Route integration is covered by static wiring tests and Python compilation; physical behavior remains for owner validation in the normal Adam Windows environment.
+
+Preserved boundaries:
+- Language persistence unchanged.
+- Durable owner memory unchanged.
+- Autonomous Meeting Attendance v8.4.0 preparation unchanged.
+- Consequential actions remain owner-approval gated.

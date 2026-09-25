@@ -1,0 +1,18 @@
+Adam Acquisition v8.4.0.2 — Verification Summary
+
+New/adjacent automated tests:
+- tests/test_typed_meeting_query_v8402.py
+- tests/test_autonomous_meeting_attendance_v840.py
+Result: 13 passed
+
+Preserved affected behavior spot-checks:
+- tests/test_meeting_no_silent_turn_v8342.py (excluding obsolete exact-version assertion)
+- tests/test_correction_context_precision_v8401.py (excluding obsolete exact-version assertion)
+Result: 7 passed, 2 obsolete exact-version assertions deselected
+
+Static/runtime integrity:
+- Python compileall: PASS
+- Real Meeting Attendance JavaScript syntax (node --check): PASS
+- ZIP integrity: to be checked after packaging
+
+Physical browser/microphone behavior still requires user validation on the target Windows machine.

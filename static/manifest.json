@@ -1,0 +1,12 @@
+{
+  "name": "Adam Personal AI Assistant",
+  "short_name": "Adam AI",
+  "description": "Owner-controlled personal AI assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#111827",
+  "orientation": "any",
+  "scope": "/",
+  "icons": [{"src":"/static/app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

@@ -1,0 +1,289 @@
+diff -ruN /mnt/data/adam84110/.pytest_cache/.gitignore /mnt/data/adam84111/.pytest_cache/.gitignore
+--- /mnt/data/adam84110/.pytest_cache/.gitignore	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/.pytest_cache/.gitignore	2026-09-10 21:07:13.952597283 +0000
+@@ -0,0 +1,2 @@
++# Created by pytest automatically.
++*
+diff -ruN /mnt/data/adam84110/.pytest_cache/CACHEDIR.TAG /mnt/data/adam84111/.pytest_cache/CACHEDIR.TAG
+--- /mnt/data/adam84110/.pytest_cache/CACHEDIR.TAG	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/.pytest_cache/CACHEDIR.TAG	2026-09-10 21:07:13.952621517 +0000
+@@ -0,0 +1,4 @@
++Signature: 8a477f597d28d172789f06886806bc55
++# This file is a cache directory tag created by pytest.
++# For information about cache directory tags, see:
++#	https://bford.info/cachedir/spec.html
+diff -ruN /mnt/data/adam84110/.pytest_cache/README.md /mnt/data/adam84111/.pytest_cache/README.md
+--- /mnt/data/adam84110/.pytest_cache/README.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/.pytest_cache/README.md	2026-09-10 21:07:13.952562720 +0000
+@@ -0,0 +1,8 @@
++# pytest cache directory #
++
++This directory contains data from the pytest's cache plugin,
++which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
++
++**Do not** commit this to version control.
++
++See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.
+diff -ruN /mnt/data/adam84110/.pytest_cache/v/cache/nodeids /mnt/data/adam84111/.pytest_cache/v/cache/nodeids
+--- /mnt/data/adam84110/.pytest_cache/v/cache/nodeids	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/.pytest_cache/v/cache/nodeids	2026-09-10 21:07:13.952836770 +0000
+@@ -0,0 +1,10 @@
++[
++  "tests/test_meeting_instant_voice_v84111.py::test_browser_telemetry_marks_actual_speech_start",
++  "tests/test_meeting_instant_voice_v84111.py::test_existing_clarification_and_approval_guards_remain",
++  "tests/test_meeting_instant_voice_v84111.py::test_fast_factual_voice_bypasses_server_tts_before_speaking",
++  "tests/test_meeting_instant_voice_v84111.py::test_instant_factual_voice_is_enabled_by_default",
++  "tests/test_meeting_instant_voice_v84111.py::test_instant_voice_is_narrowly_scoped_to_existing_fast_factual_path",
++  "tests/test_meeting_instant_voice_v84111.py::test_locked_end_turn_protection_is_unchanged",
++  "tests/test_meeting_instant_voice_v84111.py::test_professional_server_tts_path_is_still_present",
++  "tests/test_meeting_instant_voice_v84111.py::test_version_bumped"
++]
+\ No newline at end of file
+diff -ruN /mnt/data/adam84110/ACQUISITION_V8.4.1.11_NOTES.md /mnt/data/adam84111/ACQUISITION_V8.4.1.11_NOTES.md
+--- /mnt/data/adam84110/ACQUISITION_V8.4.1.11_NOTES.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/ACQUISITION_V8.4.1.11_NOTES.md	2026-09-10 21:07:32.898869636 +0000
+@@ -0,0 +1,29 @@
++# Adam Acquisition v8.4.1.11 — Immediate Voice Start / TTS Latency Fix
++
++Purpose: reduce the measured meeting `voice prep` delay without changing the already approved end-of-turn, clarification, approval, transcript, or meeting-session isolation behavior.
++
++## Changes
++
++- Adds **Instant factual voice** (enabled by default) for the existing short, self-contained factual fast path.
++- When a reply is already classified by the existing v8.4.1.9 fast factual path, Adam starts the browser/device speech engine immediately instead of waiting for `/api/tts` to finish generating server audio.
++- Approval/change/proceed questions, clarification turns, contextual follow-ups, and other governed meeting replies continue to use the professional server TTS path.
++- If instant device speech is unavailable, Adam automatically falls back to the existing professional server voice path.
++- Browser speech latency is now stamped on the actual `SpeechSynthesisUtterance.onstart` event, with a short fallback for browsers that do not reliably fire `onstart`.
++- Existing speaker-echo protection remains active.
++
++## Locked behavior preserved
++
++- v8.4.1.6 end-of-turn / technical transcript accuracy.
++- v8.4.1.7 approval-status consistency.
++- v8.4.1.8 clarification classification and new-meeting context isolation.
++- v8.4.1.10 fast/protected turn timing and complete latency telemetry.
++
++## Physical acceptance target
++
++Ask once: `Adam, what is the function of a balancing valve?`
++
++Expected:
++- latency line shows `fast factual path`;
++- `voice prep` should be substantially below the previous ~3.3 s on a browser with working Web Speech synthesis;
++- Adam still waits for the natural end of the user's turn before replying;
++- no governance/approval path should use the instant factual voice optimization.
+diff -ruN /mnt/data/adam84110/V8.4.1.11_PATCH.diff /mnt/data/adam84111/V8.4.1.11_PATCH.diff
+--- /mnt/data/adam84110/V8.4.1.11_PATCH.diff	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/V8.4.1.11_PATCH.diff	2026-09-10 21:07:32.904305950 +0000
+@@ -0,0 +1,74 @@
++diff -ruN /mnt/data/adam84110/.pytest_cache/.gitignore /mnt/data/adam84111/.pytest_cache/.gitignore
++--- /mnt/data/adam84110/.pytest_cache/.gitignore	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/adam84111/.pytest_cache/.gitignore	2026-09-10 21:07:13.952597283 +0000
++@@ -0,0 +1,2 @@
+++# Created by pytest automatically.
+++*
++diff -ruN /mnt/data/adam84110/.pytest_cache/CACHEDIR.TAG /mnt/data/adam84111/.pytest_cache/CACHEDIR.TAG
++--- /mnt/data/adam84110/.pytest_cache/CACHEDIR.TAG	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/adam84111/.pytest_cache/CACHEDIR.TAG	2026-09-10 21:07:13.952621517 +0000
++@@ -0,0 +1,4 @@
+++Signature: 8a477f597d28d172789f06886806bc55
+++# This file is a cache directory tag created by pytest.
+++# For information about cache directory tags, see:
+++#	https://bford.info/cachedir/spec.html
++diff -ruN /mnt/data/adam84110/.pytest_cache/README.md /mnt/data/adam84111/.pytest_cache/README.md
++--- /mnt/data/adam84110/.pytest_cache/README.md	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/adam84111/.pytest_cache/README.md	2026-09-10 21:07:13.952562720 +0000
++@@ -0,0 +1,8 @@
+++# pytest cache directory #
+++
+++This directory contains data from the pytest's cache plugin,
+++which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
+++
+++**Do not** commit this to version control.
+++
+++See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.
++diff -ruN /mnt/data/adam84110/.pytest_cache/v/cache/nodeids /mnt/data/adam84111/.pytest_cache/v/cache/nodeids
++--- /mnt/data/adam84110/.pytest_cache/v/cache/nodeids	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/adam84111/.pytest_cache/v/cache/nodeids	2026-09-10 21:07:13.952836770 +0000
++@@ -0,0 +1,10 @@
+++[
+++  "tests/test_meeting_instant_voice_v84111.py::test_browser_telemetry_marks_actual_speech_start",
+++  "tests/test_meeting_instant_voice_v84111.py::test_existing_clarification_and_approval_guards_remain",
+++  "tests/test_meeting_instant_voice_v84111.py::test_fast_factual_voice_bypasses_server_tts_before_speaking",
+++  "tests/test_meeting_instant_voice_v84111.py::test_instant_factual_voice_is_enabled_by_default",
+++  "tests/test_meeting_instant_voice_v84111.py::test_instant_voice_is_narrowly_scoped_to_existing_fast_factual_path",
+++  "tests/test_meeting_instant_voice_v84111.py::test_locked_end_turn_protection_is_unchanged",
+++  "tests/test_meeting_instant_voice_v84111.py::test_professional_server_tts_path_is_still_present",
+++  "tests/test_meeting_instant_voice_v84111.py::test_version_bumped"
+++]
++\ No newline at end of file
++diff -ruN /mnt/data/adam84110/ACQUISITION_V8.4.1.11_NOTES.md /mnt/data/adam84111/ACQUISITION_V8.4.1.11_NOTES.md
++--- /mnt/data/adam84110/ACQUISITION_V8.4.1.11_NOTES.md	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/adam84111/ACQUISITION_V8.4.1.11_NOTES.md	2026-09-10 21:07:32.898869636 +0000
++@@ -0,0 +1,29 @@
+++# Adam Acquisition v8.4.1.11 — Immediate Voice Start / TTS Latency Fix
+++
+++Purpose: reduce the measured meeting `voice prep` delay without changing the already approved end-of-turn, clarification, approval, transcript, or meeting-session isolation behavior.
+++
+++## Changes
+++
+++- Adds **Instant factual voice** (enabled by default) for the existing short, self-contained factual fast path.
+++- When a reply is already classified by the existing v8.4.1.9 fast factual path, Adam starts the browser/device speech engine immediately instead of waiting for `/api/tts` to finish generating server audio.
+++- Approval/change/proceed questions, clarification turns, contextual follow-ups, and other governed meeting replies continue to use the professional server TTS path.
+++- If instant device speech is unavailable, Adam automatically falls back to the existing professional server voice path.
+++- Browser speech latency is now stamped on the actual `SpeechSynthesisUtterance.onstart` event, with a short fallback for browsers that do not reliably fire `onstart`.
+++- Existing speaker-echo protection remains active.
+++
+++## Locked behavior preserved
+++
+++- v8.4.1.6 end-of-turn / technical transcript accuracy.
+++- v8.4.1.7 approval-status consistency.
+++- v8.4.1.8 clarification classification and new-meeting context isolation.
+++- v8.4.1.10 fast/protected turn timing and complete latency telemetry.
+++
+++## Physical acceptance target
+++
+++Ask once: `Adam, what is the function of a balancing valve?`
+++
+++Expected:
+++- latency line shows `fast factual path`;
+++- `voice prep` should be substantially below the previous ~3.3 s on a browser with working Web Speech synthesis;
+++- Adam still waits for the natural end of the user's turn before replying;
+++- no governance/approval path should use the instant factual voice optimization.
+diff -ruN /mnt/data/adam84110/VERIFICATION_V8.4.1.11.txt /mnt/data/adam84111/VERIFICATION_V8.4.1.11.txt
+--- /mnt/data/adam84110/VERIFICATION_V8.4.1.11.txt	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/VERIFICATION_V8.4.1.11.txt	2026-09-10 21:07:32.900264284 +0000
+@@ -0,0 +1,20 @@
++Adam Acquisition v8.4.1.11 targeted verification
++
++1. VERSION is v8.4.1.11 — PASS
++2. Instant factual voice control exists and is enabled by default — PASS
++3. Instant voice is gated by the existing fast factual path — PASS
++4. Fast factual voice starts through browser speech without first waiting for /api/tts — PASS
++5. Professional server TTS path remains available for governed/non-fast replies — PASS
++6. Automatic server-voice fallback remains available when browser speech is unavailable — PASS
++7. Browser latency timing is tied to actual speech onstart with fallback — PASS
++8. Protected 4200 ms end-of-turn boundary remains unchanged — PASS
++9. Fast 2400 ms end-of-turn boundary remains unchanged — PASS
++10. v8.4.1.10 12000 ms short-turn eligibility remains unchanged — PASS
++11. Clarification guard remains present — PASS
++12. Approval consistency guard remains present — PASS
++13. Meeting-session isolation guard remains present — PASS
++14. Python compile — PASS
++15. Meeting-page JavaScript syntax — PASS
++16. New targeted pytest — 8/8 PASS
++
++Automated/static verification only. Actual voice-start latency depends on browser/device speech availability and the deployed computer.
+Binary files /mnt/data/adam84110/__pycache__/app.cpython-313.pyc and /mnt/data/adam84111/__pycache__/app.cpython-313.pyc differ
+diff -ruN /mnt/data/adam84110/app.py /mnt/data/adam84111/app.py
+--- /mnt/data/adam84110/app.py	2026-09-10 20:54:04.505380192 +0000
++++ /mnt/data/adam84111/app.py	2026-09-10 21:06:39.908359970 +0000
+@@ -188,7 +188,7 @@
+ from adam_core.meeting_language_policy import DEFAULT_REPLY_LANGUAGE, detect_requested_reply_language, tts_locale_for_reply, professional_scope_prompt
+ from adam_core.meeting_focus_engine import evaluate_meeting_focus, detect_explicit_project_mismatch, self_test as meeting_focus_self_test
+ 
+-VERSION = "v8.4.1.10"
++VERSION = "v8.4.1.11"
+ BASELINE_VERSION = "v0.8.0.1"
+ BUILD_CHANNEL = "acquisition"
+ 
+diff -ruN /mnt/data/adam84110/templates/real_meeting_attendance.html /mnt/data/adam84111/templates/real_meeting_attendance.html
+--- /mnt/data/adam84110/templates/real_meeting_attendance.html	2026-09-10 20:54:04.503447089 +0000
++++ /mnt/data/adam84111/templates/real_meeting_attendance.html	2026-09-10 21:06:39.909279171 +0000
+@@ -19,7 +19,7 @@
+ <div id="representativePanel" class="ok" style="display:none;margin-top:14px"><b>Owner Representative — professional rehearsal mode</b><p>Adam may represent Mohamad in professional discussion across disciplines, answer questions, explain, ask for clarification, and state only supported facts or positions written in the briefing below. Adam understands multilingual/code-switched speech. His default reply is English; a participant may explicitly ask him to switch to Arabic or another language. Adam must disclose that he is an AI representative and cannot approve costs, variations, contractual changes, purchases, payments, committed dates, or other consequential commitments without separate owner approval.</p><p><b>Natural meeting dialogue:</b> ON — Adam answers like an experienced professional colleague: conclusion first, concise by default, conversational follow-ups, calm disagreement, minimal robotic preambles, and practical clarification only when needed.</p><div class="note" id="meetingFocusPanel"><b>Human Meeting Presence — Intelligent Meeting Focus</b><div class="check"><input id="meetingFocusLock" type="checkbox" checked><label for="meetingFocusLock" style="margin:0">Meeting Focus Lock — concentrate on this meeting and reject likely side-room / other-project speech before formal transcript, memory, Q&amp;A, and report</label></div><div class="row"><div><label>Room focus sensitivity</label><select id="focusSensitivity"><option value="strict" selected>Strict — shared room / nearby conversations</option><option value="balanced">Balanced — normal meeting room</option><option value="open">Open — capture all detected speech</option></select></div><div><label>Meeting focus / agenda keywords</label><input id="meetingFocusAgenda" type="text" placeholder="Example: MEP coordination, Tower, HVAC, chilled water, ductwork, variations"></div></div><p><small>Focus Lock combines meeting title/project, declared participants/companies, current discussion context, topic relevance, and a weak near-field audio hint. In Strict mode, an explicitly named different project is a hard reject unless the speaker clearly frames it as a comparison/reference to the active project. Where the browser supports it, microphone voice isolation is requested and automatic gain is disabled so distant voices are less likely to dominate. This version does not claim biometric speaker identification or perfect physical source separation. Audio may still be processed transiently for speech transcription; filtered side conversations are not added to Adam's formal meeting transcript or retained meeting memory.</small></p><label>Selective Listening Monitor</label><textarea id="focusMonitor" readonly style="min-height:120px" placeholder="Adam will show accepted meeting speech vs filtered side-room speech here without retaining the rejected conversation text."></textarea></div><label>Representative participation style</label><select id="participationStyle"><option value="conservative">Conservative — direct questions only</option><option value="balanced" selected>Balanced — questions + material approval/commitment risks</option><option value="proactive">Proactive — also flag material technical/commercial risks and owner actions</option></select><p style="margin-top:6px"><small>Balanced is recommended. Adam should not interrupt routine discussion; proactive intervention is limited to material risks, commitments, contradictions, or owner actions.</small></p><label>Professional discipline</label><select id="professionalScope"><option value="auto" selected>Auto-detect — cross-disciplinary professional</option><option value="engineering_mep">Engineering / MEP / Construction</option><option value="project_management">Project Management</option><option value="commercial_contracts">Commercial / Contracts</option><option value="procurement">Procurement</option><option value="finance">Finance / Cost</option><option value="it_software">IT / Software</option><option value="sales_business">Sales / Business</option><option value="other">Other professional discipline</option></select><label>Owner briefing / positions Adam may rely on</label><textarea id="ownerBriefing" style="min-height:120px" placeholder="Example: Mechanical shop drawings are targeted for Tuesday. Do not accept any variation or cost. Ask the contractor to submit supporting documents for owner review."></textarea><label>Authority profile</label><textarea id="authorityProfile" style="min-height:90px">Answer technical and factual questions; ask for clarification; take notes; record requests for Mohamad. Do not approve variations, costs, contractual changes, purchases, payments, commitments, or date changes without separate owner approval.</textarea><div class="check" id="representativeApprovalRow" style="display:none"><input id="representativeApproved" type="checkbox"><label for="representativeApproved" style="margin:0">Owner representative session approval (synchronized with the main approval above)</label></div><p><b>Test operation:</b> use a second device/person as the meeting participant. Ask questions aloud or type them below. Adam should answer, speak, take notes, and refuse consequential commitments.</p></div><hr><b>Interactive Meeting Conversation</b><p>Approve once for this meeting session. Adam can then answer questions addressed to “Adam” and continue follow-up discussion. External actions and commitments still require their normal separate approvals. Do not promise, send, approve, purchase, trade, schedule, or execute external actions without the normal separate owner approval.</p>
+ <div class="check"><input id="conversationApproved" type="checkbox"><label for="conversationApproved" style="margin:0">Owner Approval — allow Adam to converse during this meeting session (required for Active Participant; Owner Representative uses the representative approval above)</label></div>
+ <label>Question / discussion point for Adam</label><textarea id="conversationInput" style="min-height:70px" placeholder="Example: Adam, explain why the chilled-water pipe size may need to increase."></textarea>
+-<button id="askAdam">Ask Adam & Speak</button><div class="check"><input id="autoRespond" type="checkbox"><label for="autoRespond" style="margin:0">Auto-respond when a final microphone sentence addresses “Adam” (automatic in Owner Representative mode)</label></div><div class="check"><input id="meetingAutoSpeak" type="checkbox" checked><label for="meetingAutoSpeak" style="margin:0">Speak Adam's meeting answers automatically — applies to microphone and typed meeting queries</label></div><div class="check"><input id="meetingFastResponse" type="checkbox" checked><label for="meetingFastResponse" style="margin:0">Fast meeting response — shorter silence boundary for short questions; longer turns keep the full natural-pause protection</label></div><div class="check"><input id="meetingFastVoice" type="checkbox" checked><label for="meetingFastVoice" style="margin:0">Fast meeting voice — stream long answers in short speech chunks with automatic browser fallback</label></div><div class="check"><input id="meetingSpeakerProtection" type="checkbox" checked><label for="meetingSpeakerProtection" style="margin:0">Laptop speaker protection — ignore Adam's own speaker audio while he talks so the microphone does not cancel his reply (recommended)</label></div><button id="testMeetingVoice" type="button" class="secondary">Test / Enable Meeting Voice</button><p id="meetingVoiceStatus">Meeting voice: ready — click Start Listening or Test / Enable Meeting Voice once to unlock browser audio</p>
++<button id="askAdam">Ask Adam & Speak</button><div class="check"><input id="autoRespond" type="checkbox"><label for="autoRespond" style="margin:0">Auto-respond when a final microphone sentence addresses “Adam” (automatic in Owner Representative mode)</label></div><div class="check"><input id="meetingAutoSpeak" type="checkbox" checked><label for="meetingAutoSpeak" style="margin:0">Speak Adam's meeting answers automatically — applies to microphone and typed meeting queries</label></div><div class="check"><input id="meetingFastResponse" type="checkbox" checked><label for="meetingFastResponse" style="margin:0">Fast meeting response — shorter silence boundary for short questions; longer turns keep the full natural-pause protection</label></div><div class="check"><input id="meetingFastVoice" type="checkbox" checked><label for="meetingFastVoice" style="margin:0">Fast meeting voice — stream long answers in short speech chunks with automatic browser fallback</label></div><div class="check"><input id="meetingInstantFactualVoice" type="checkbox" checked><label for="meetingInstantFactualVoice" style="margin:0">Instant factual voice — for short factual fast-path replies, start the device voice immediately instead of waiting for server TTS; governed/change/approval replies keep the professional server voice path</label></div><div class="check"><input id="meetingSpeakerProtection" type="checkbox" checked><label for="meetingSpeakerProtection" style="margin:0">Laptop speaker protection — ignore Adam's own speaker audio while he talks so the microphone does not cancel his reply (recommended)</label></div><button id="testMeetingVoice" type="button" class="secondary">Test / Enable Meeting Voice</button><p id="meetingVoiceStatus">Meeting voice: ready — click Start Listening or Test / Enable Meeting Voice once to unlock browser audio</p>
+ <p id="conversationStatus">Conversation: waiting for session approval</p></div></div>
+ <div class="card"><a href="/">Back to Adam</a> &nbsp; <a href="/meeting-platform">Meeting Platform Adapter</a></div></div>
+ <script>
+@@ -561,10 +561,11 @@
+   if(!('speechSynthesis' in window)){reject(new Error('browser speech unavailable'));return;}
+   try{
+    speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=String(language||'en-US');const v=preferredBrowserMeetingVoice(u.lang);if(v)u.voice=v;u.volume=1;u.rate=1;u.pitch=1;
+-   let done=false;let speakerStarted=false;const finish=(msg,err)=>{if(done)return;done=true;clearTimeout(timer);meetingAdamSpeechResolve=null;if(speakerStarted){speakerStarted=false;if(finalChunk)restartCleanMeetingCaptureAfterAdamSpeech();else meetingSpeakerOutputActive=true;}if(err)reject(err);else resolve(msg);};
++   let done=false;let speakerStarted=false;let startFallback=null;const markStarted=()=>{if(done||speakerStarted)return;speakerStarted=true;markAdamSpeakerPlaybackStart();};
++   const finish=(msg,err)=>{if(done)return;done=true;clearTimeout(timer);if(startFallback)clearTimeout(startFallback);meetingAdamSpeechResolve=null;if(speakerStarted){speakerStarted=false;if(finalChunk)restartCleanMeetingCaptureAfterAdamSpeech();else meetingSpeakerOutputActive=true;}if(err)reject(err);else resolve(msg);};
+    const timer=setTimeout(()=>finish('',new Error('browser voice timeout')),Math.max(12000,Math.min(45000,String(text||'').length*95)));
+-   meetingAdamSpeechResolve=(msg)=>finish(msg||'interrupted',null);u.onend=()=>finish('browser voice chunk completed',null);u.onerror=()=>finish('',new Error('browser voice error'));
+-   if(jobId!==meetingVoiceJobSeq){finish('stale voice job',null);return;}markAdamSpeakerPlaybackStart();speakerStarted=true;speechSynthesis.speak(u);
++   meetingAdamSpeechResolve=(msg)=>finish(msg||'interrupted',null);u.onstart=markStarted;u.onend=()=>finish('browser voice chunk completed',null);u.onerror=()=>finish('',new Error('browser voice error'));
++   if(jobId!==meetingVoiceJobSeq){finish('stale voice job',null);return;}speechSynthesis.speak(u);startFallback=setTimeout(()=>{try{if(speechSynthesis.speaking)markStarted();}catch(_){}},180);
+   }catch(e){meetingAdamSpeechResolve=null;reject(e);}
+  });
+ }
+@@ -602,6 +603,16 @@
+  const locale=String(language||(/[\u0600-\u06ff]/.test(clean)?'ar-LB':'auto'));
+  meetingLastSpokenText=clean;meetingLastSpokenAt=Date.now();meetingAdamSpeaking=true;
+  const fastVoice=!!((document.getElementById('meetingFastVoice')||{}).checked);
++ const instantFactualVoice=!!((document.getElementById('meetingInstantFactualVoice')||{}).checked);
++ if(fastVoice&&instantFactualVoice&&meetingLatencyTrace.fastPath&&('speechSynthesis' in window)){
++  const instantJobId=++meetingVoiceJobSeq;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;setMeetingVoiceStatus('instant factual voice — starting device speech without server-TTS wait');
++  try{
++   await browserSpeakMeetingText(clean,locale,instantJobId,true);
++   meetingLastVoiceDeliveryOk=true;setMeetingVoiceStatus('voice completed — instant factual device voice');return 'voice completed';
++  }catch(instantVoiceErr){setMeetingVoiceStatus('instant device voice unavailable — using professional server voice');}
++  finally{meetingAdamSpeaking=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastSpokenAt=Date.now();}
++  meetingAdamSpeaking=true;
++ }
+  const voiceChunks=fastVoice?splitMeetingSpeechChunks(clean,MEETING_FAST_VOICE_CHUNK_CHARS):[clean];
+  if(fastVoice&&voiceChunks.length>1){
+   const jobId=++meetingVoiceJobSeq;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;setMeetingVoiceStatus('fast voice — preparing first short speech chunk');
+Binary files /mnt/data/adam84110/tests/__pycache__/test_meeting_instant_voice_v84111.cpython-313-pytest-9.0.2.pyc and /mnt/data/adam84111/tests/__pycache__/test_meeting_instant_voice_v84111.cpython-313-pytest-9.0.2.pyc differ
+diff -ruN /mnt/data/adam84110/tests/test_meeting_instant_voice_v84111.py /mnt/data/adam84111/tests/test_meeting_instant_voice_v84111.py
+--- /mnt/data/adam84110/tests/test_meeting_instant_voice_v84111.py	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/adam84111/tests/test_meeting_instant_voice_v84111.py	2026-09-10 21:07:12.802399686 +0000
+@@ -0,0 +1,51 @@
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[1]
++APP = (ROOT / 'app.py').read_text(encoding='utf-8')
++HTML = (ROOT / 'templates' / 'real_meeting_attendance.html').read_text(encoding='utf-8')
++
++
++def test_version_bumped():
++    assert 'VERSION = "v8.4.1.11"' in APP
++
++
++def test_instant_factual_voice_is_enabled_by_default():
++    assert 'id="meetingInstantFactualVoice" type="checkbox" checked' in HTML
++    assert 'Instant factual voice' in HTML
++
++
++def test_instant_voice_is_narrowly_scoped_to_existing_fast_factual_path():
++    assert "fastVoice&&instantFactualVoice&&meetingLatencyTrace.fastPath&&('speechSynthesis' in window)" in HTML
++    assert "instant factual voice — starting device speech without server-TTS wait" in HTML
++
++
++def test_fast_factual_voice_bypasses_server_tts_before_speaking():
++    start = HTML.index("if(fastVoice&&instantFactualVoice&&meetingLatencyTrace.fastPath")
++    end = HTML.index("const voiceChunks=", start)
++    block = HTML[start:end]
++    assert "await browserSpeakMeetingText(clean,locale,instantJobId,true)" in block
++    assert "fetch('/api/tts'" not in block
++
++
++def test_professional_server_tts_path_is_still_present():
++    assert "playServerMeetingChunk(chunk,locale,jobId,i+1,voiceChunks.length)" in HTML
++    assert "fetch('/api/tts'" in HTML
++    assert "instant device voice unavailable — using professional server voice" in HTML
++
++
++def test_browser_telemetry_marks_actual_speech_start():
++    assert "u.onstart=markStarted" in HTML
++    assert "startFallback=setTimeout" in HTML
++    assert "meetingLatencyTrace.voiceStartAt=Date.now()" in HTML
++
++
++def test_locked_end_turn_protection_is_unchanged():
++    assert "MEETING_END_OF_TURN_SILENCE_MS=4200" in HTML
++    assert "MEETING_FAST_END_OF_TURN_SILENCE_MS=2400" in HTML
++    assert "MEETING_FAST_TURN_MAX_SPEECH_MS=12000" in HTML
++
++
++def test_existing_clarification_and_approval_guards_remain():
++    assert "_meeting_material_change_clarification" in APP
++    assert "approval_status_consistency_guard" in APP
++    assert "meeting_session_closed" in APP

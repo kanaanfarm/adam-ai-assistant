@@ -1,0 +1,21 @@
+Adam Acquisition v8.4.1.5 — Meeting Prompt Runtime Fix
+Targeted verification: 11/11 PASS
+
+Current fix checks (6/6):
+1. Version bumped to v8.4.1.5: PASS
+2. Meeting prompt AST contains no unary-plus operator: PASS
+3. Generic diagnostic correctly identifies meeting server-path failure after provider test passes: PASS
+4. Direct-question prompt expression executes successfully: PASS
+5. Correction/response-required prompt expression executes successfully: PASS
+6. Proactive addressed-comment prompt expression executes successfully: PASS
+
+Provider transport compatibility checks from v8.4.1.3 (5/5, version-only assertion intentionally excluded):
+7. Official OpenAI GPT-5.x routing uses Responses transport: PASS
+8. Responses payload construction remains valid: PASS
+9. Responses text extraction remains valid: PASS
+10. Error handling/fallback boundary remains valid: PASS
+11. Meeting provider watchdog/transport compatibility remains valid: PASS
+
+No live external provider request was executed during package verification.
+The owner API key is not included in the package.
+Previously approved acceptance tests remain carried forward; retest only the affected meeting-response path.

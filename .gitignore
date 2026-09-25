@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+data/ai_settings.json
+data/audit_log.jsonl
+data/microsoft_config.json
+data/microsoft_device_state.json
+data/microsoft_token_cache.json
+data/whatsapp_config.json
+data/whatsapp_events.jsonl
+data/whatsapp_inbox.jsonl
+data/stock_config.json

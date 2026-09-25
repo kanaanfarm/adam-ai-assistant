@@ -1,0 +1,5 @@
+plugins { id 'com.android.application' }
+
+android { namespace 'com.kanaansoft.ramiai'; compileSdk 35
+    defaultConfig { applicationId 'com.kanaansoft.ramiai'; minSdk 26; targetSdk 35; versionCode 67; versionName '0.6.7' }
+}

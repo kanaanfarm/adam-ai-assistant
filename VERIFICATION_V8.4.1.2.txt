@@ -1,0 +1,26 @@
+Adam Acquisition v8.4.1.2 targeted verification
+================================================
+Baseline: v8.4.1.1 archived package
+Scope: Meeting accepted-turn persistence, duplicate suppression, AI response pairing, Processing report state
+
+Automated targeted checks:
+- Python syntax compile: PASS
+- Meeting page JavaScript syntax (Node --check): PASS
+- tests/test_meeting_accepted_turn_pairing_v8412.py: 11 PASS
+
+Validated by targeted tests:
+1. Version/state boundary present.
+2. Accepted speech persisted before AI dispatch.
+3. Duplicate completed STT suppressed before focus and on server.
+4. Stable question ID preserved through focus/note/dispatch/pairing.
+5. AI single-flight, completed-duplicate protection, and 25-second meeting-provider timeout present.
+6. Delayed note callbacks cannot regress a provider/completed state.
+7. Paired discussion record idempotent by question ID.
+8. Processing coverage represented in meeting report.
+9. Visible five-stage reply trace present, including explicit provider timeout state.
+10. End Meeting resets new ephemeral state.
+11. Owner/governance/external-action boundaries preserved.
+
+Physical owner acceptance still required only for the affected real voice path:
+Ask once: "Adam, what is the function of a chilled water pump?"
+Expected: 1 accepted -> 1 dispatch -> 1 AI answer -> 1 spoken reply -> 1 paired report record; no duplicate/background misclassification.

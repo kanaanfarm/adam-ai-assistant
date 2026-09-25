@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Calls - {{ app_name }}</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f4f6;margin:0;color:#111827}
+.wrap{max-width:850px;margin:30px auto;padding:18px}
+.card{background:white;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+.row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+input,button,a.btn{font:inherit;padding:11px;border:1px solid #bbb;border-radius:8px}
+button{cursor:pointer}.primary{background:#111827;color:white;border-color:#111827}
+.contact{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #eee}
+.actions{display:flex;gap:6px;flex-wrap:wrap}.btn{text-decoration:none;color:#111827;background:white}
+.small{font-size:12px;color:#6b7280}
+@media(max-width:650px){.wrap{margin:0;padding:10px}.row{grid-template-columns:1fr}.contact{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>Calls</h1>
+<p>This first Calls module saves your contacts locally. When you press Call, the assistant asks for confirmation and then opens the device phone dialer using a <code>tel:</code> link.</p>
+<p class="small">It does not secretly place calls and it does not yet let the AI talk to the other person by itself.</p>
+<a class="btn" href="/">← Back to Assistant</a>
+</div>
+
+<div class="card">
+<h2>Add / Update Contact</h2>
+<div class="row">
+<input id="name" placeholder="Name">
+<input id="phone" placeholder="+971... or +961...">
+<button class="primary" id="save">Save</button>
+</div>
+<div id="result" class="small"></div>
+</div>
+
+<div class="card">
+<h2>My Contacts</h2>
+<div id="contacts"></div>
+</div>
+</div>
+
+<script>
+let contacts={{ contacts|tojson }};
+const contactsDiv=document.getElementById('contacts');
+const result=document.getElementById('result');
+
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function render(){
+ contactsDiv.innerHTML='';
+ if(!contacts.length){contactsDiv.innerHTML='<div class="small">No contacts saved yet.</div>';return}
+ contacts.forEach(c=>{
+  const d=document.createElement('div');d.className='contact';
+  d.innerHTML=`<div><b>${esc(c.name)}</b><div class="small">${esc(c.phone)}</div></div>
+  <div class="actions">
+    <button onclick="callContact('${encodeURIComponent(c.name)}','${encodeURIComponent(c.phone)}')">📞 Call</button>
+    <button onclick="delContact('${encodeURIComponent(c.name)}')">Delete</button>
+  </div>`;
+  contactsDiv.appendChild(d);
+ });
+}
+async function callContact(n,p){
+ const name=decodeURIComponent(n),phone=decodeURIComponent(p);
+ if(!confirm('Call '+name+' at '+phone+'?')) return;
+ window.location.href='tel:'+phone;
+}
+async function delContact(n){
+ const name=decodeURIComponent(n);
+ if(!confirm('Delete '+name+'?')) return;
+ const r=await fetch('/api/contacts/'+encodeURIComponent(name),{method:'DELETE'});
+ const d=await r.json();contacts=d.contacts||[];render();
+}
+document.getElementById('save').onclick=async()=>{
+ const name=document.getElementById('name').value.trim();
+ const phone=document.getElementById('phone').value.trim();
+ const r=await fetch('/api/contacts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})});
+ const d=await r.json();
+ result.textContent=d.ok?'Saved.':'Error: '+(d.error||'Unable to save');
+ if(d.ok){contacts=d.contacts||[];render();}
+};
+render();
+</script>
+</body>
+</html>

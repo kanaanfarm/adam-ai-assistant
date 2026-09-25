@@ -1,0 +1,619 @@
+--- /mnt/data/adam8417/app.py	2026-09-10 19:34:18.641418428 +0000
++++ /mnt/data/adam8418/app.py	2026-09-10 19:54:17.251272648 +0000
+@@ -188,7 +188,7 @@
+ from adam_core.meeting_language_policy import DEFAULT_REPLY_LANGUAGE, detect_requested_reply_language, tts_locale_for_reply, professional_scope_prompt
+ from adam_core.meeting_focus_engine import evaluate_meeting_focus, detect_explicit_project_mismatch, self_test as meeting_focus_self_test
+ 
+-VERSION = "v8.4.1.7"
++VERSION = "v8.4.1.8"
+ BASELINE_VERSION = "v0.8.0.1"
+ BUILD_CHANNEL = "acquisition"
+ 
+@@ -7365,6 +7365,24 @@
+ _MEETING_ACCEPTED_TURNS_MAX_ITEMS = 160
+ _MEETING_AI_INFLIGHT = set()
+ _MEETING_AI_INFLIGHT_LOCK = threading.RLock()
++# v8.4.1.8 — closed-session tombstones prevent a late browser/STT callback from
++# recreating a meeting after End Meeting / New Session. The browser also carries
++# a session epoch, but the server keeps this independent backstop.
++_MEETING_CLOSED_SESSIONS = {}
++_MEETING_CLOSED_SESSIONS_MAX_ITEMS = 240
++
++def _meeting_session_is_closed(session_id):
++    sid = str(session_id or "").strip()
++    return bool(sid and sid in _MEETING_CLOSED_SESSIONS)
++
++def _meeting_mark_session_closed(session_id):
++    sid = str(session_id or "").strip()
++    if not sid:
++        return
++    _MEETING_CLOSED_SESSIONS[sid] = datetime.now(timezone.utc).isoformat()
++    if len(_MEETING_CLOSED_SESSIONS) > _MEETING_CLOSED_SESSIONS_MAX_ITEMS:
++        for key in list(_MEETING_CLOSED_SESSIONS)[:-_MEETING_CLOSED_SESSIONS_MAX_ITEMS]:
++            _MEETING_CLOSED_SESSIONS.pop(key, None)
+ 
+ def _meeting_question_coverage_session(session_id):
+     sid = str(session_id or "").strip() or uuid.uuid4().hex
+@@ -7587,6 +7605,60 @@
+     return bool(missing and not true_clarify)
+ 
+ 
++def _meeting_material_change_clarification(question, direct_question=True):
++    """Deterministic clarity gate for approval/proceed questions on material changes.
++
++    v8.4.1.8: A question can be linguistically clear yet still be unsafe to classify
++    as a completed answer when the participant asks whether a material equipment
++    change may proceed and the proposed equipment duty is unspecified. In that
++    case Adam must ask for the decision-critical proposal data instead of merely
++    giving a conditional recommendation and marking the direct question Answered.
++    """
++    q = re.sub(r"\s+", " ", str(question or "").strip().lower())
++    if not direct_question or not q:
++        return {"required": False, "reason": "not_direct_question", "missing": []}
++
++    asks_permission = bool(re.search(
++        r"\b(can|could|should|may|do)\b.{0,50}\b(proceed|approve|approved|accept|change|replace|use|install)\b|"
++        r"\b(is|would)\b.{0,35}\b(acceptable|approved|okay|ok)\b", q, re.I
++    ))
++    pump_change = ("pump" in q) and any(x in q for x in (
++        "change", "replace", "replacement", "new pump", "bigger", "larger",
++        "smaller", "increase", "decrease", "upgrade", "different pump"
++    ))
++    if not (asks_permission and pump_change):
++        return {"required": False, "reason": "not_material_pump_decision", "missing": []}
++
++    evidence_groups = {
++        "flow": ("flow", "l/s", "lps", "gpm", "m3/h", "m³/h"),
++        "head": ("head", "kpa", "bar", "meter head", "metre head", "mwc"),
++        "approved_reference": ("approved schedule", "pump schedule", "approved model", "approved pump", "approved design"),
++        "proposal_reference": ("model", "submittal", "data sheet", "datasheet", "selection", "duty point"),
++        "calculation": ("hydraulic calculation", "revised hydraulic", "pump calculation"),
++        "reason": ("reason", "because", "due to"),
++    }
++    present = {name for name, terms in evidence_groups.items() if any(term in q for term in terms)}
++    # At minimum, a proceed/approval decision on a pump change needs both the
++    # proposed hydraulic duty and a traceable approved/proposed reference.
++    has_hydraulic_duty = "flow" in present and "head" in present
++    has_traceable_basis = bool(present & {"approved_reference", "proposal_reference", "calculation"})
++    if has_hydraulic_duty and has_traceable_basis:
++        return {"required": False, "reason": "decision_data_present", "missing": []}
++
++    missing = []
++    if not has_hydraulic_duty:
++        missing.append("proposed pump duty point (flow and head)")
++    if not has_traceable_basis:
++        missing.append("approved pump schedule/model and proposed pump submittal")
++    if "reason" not in present:
++        missing.append("reason for the change")
++    return {
++        "required": True,
++        "reason": "material_pump_change_missing_decision_data",
++        "missing": missing,
++    }
++
++
+ def _meeting_explicit_owner_approval_gate(question, answer, status):
+     """Return True only when the paired exchange itself carries an owner approval gate.
+ 
+@@ -7723,11 +7795,17 @@
+             "ok": False, "status": "approval_required", "owner_gate_preserved": True,
+             "focus_checked": False, "version": VERSION,
+         }), 403
++    requested_sid = str(body.get("session_id") or "").strip()
++    if requested_sid and _meeting_session_is_closed(requested_sid):
++        return jsonify({
++            "ok": False, "status": "meeting_session_closed", "session_id": requested_sid,
++            "stale_callback_rejected": True, "version": VERSION,
++        }), 409
+     text = str(body.get("text") or "").strip()
+     if not text:
+         return jsonify({"ok": False, "status": "text_required", "version": VERSION}), 400
+ 
+-    sid = str(body.get("session_id") or "").strip() or uuid.uuid4().hex
++    sid = requested_sid or uuid.uuid4().hex
+     question_id = str(body.get("question_id") or body.get("utterance_id") or "").strip()[:120] or uuid.uuid4().hex
+     _, memory = _meeting_transcript_session(sid)
+     _, discussion_records = _meeting_discussion_session(sid)
+@@ -7864,10 +7942,16 @@
+     body = request.get_json(silent=True) or {}
+     if not bool(body.get("owner_approved")):
+         return jsonify({"ok": False, "status": "approval_required", "owner_gate_preserved": True, "version": VERSION}), 403
++    requested_sid = str(body.get("session_id") or "").strip()
++    if requested_sid and _meeting_session_is_closed(requested_sid):
++        return jsonify({
++            "ok": False, "status": "meeting_session_closed", "session_id": requested_sid,
++            "stale_callback_rejected": True, "version": VERSION,
++        }), 409
+     text = str(body.get("text") or "").strip()
+     if not text:
+         return jsonify({"ok": False, "status": "text_required", "version": VERSION}), 400
+-    sid, memory = _meeting_transcript_session(body.get("session_id"))
++    sid, memory = _meeting_transcript_session(requested_sid)
+     question_id = str(body.get("question_id") or body.get("utterance_id") or "").strip()[:120] or uuid.uuid4().hex
+     entry = text[:6000]
+     if not memory or memory[-1] != entry:
+@@ -7899,6 +7983,14 @@
+             "version": VERSION,
+         }), 403
+ 
++    requested_sid_guard = str(body.get("session_id") or "").strip()
++    if requested_sid_guard and _meeting_session_is_closed(requested_sid_guard):
++        return jsonify({
++            "ok": False, "status": "meeting_session_closed", "session_id": requested_sid_guard,
++            "stale_callback_rejected": True, "owner_gate_preserved": True,
++            "external_action_executed": False, "version": VERSION,
++        }), 409
++
+     question = str(body.get("question") or "").strip()
+     if not question:
+         return jsonify({"ok": False, "status": "question_required", "version": VERSION}), 400
+@@ -7935,10 +8027,12 @@
+     _, accepted_turns = _meeting_accepted_turn_session(session_id)
+     requested_question_id = str(body.get("question_id") or "").strip()[:120]
+     direct_question = bool(body.get("direct_question")) or _meeting_question_is_direct(question)
++    clarification_followup = bool(body.get("clarification_followup"))
++    clarification_parent_question_id = str(body.get("clarification_parent_question_id") or "").strip()[:120]
+     turn_kind = str(body.get("turn_kind") or ("question" if direct_question else "statement")).strip().lower()[:40]
+     if turn_kind not in {"question", "correction", "order", "addressed_comment", "statement"}:
+         turn_kind = "statement"
+-    response_required = bool(body.get("response_required")) or direct_question or turn_kind in {"correction", "order", "addressed_comment"}
++    response_required = bool(body.get("response_required")) or direct_question or clarification_followup or turn_kind in {"correction", "order", "addressed_comment"}
+     question_id, coverage_rec = _meeting_coverage_upsert(
+         coverage_records, question_id=requested_question_id, question=question,
+         direct_question=direct_question, state="Processing"
+@@ -8000,7 +8094,8 @@
+     # Merge client history only as a recovery source (for example after a server reload),
+     # while server-side in-memory history is authoritative during the live meeting session.
+     client_history = body.get("messages") or []
+-    if not server_history and isinstance(client_history, list):
++    client_history_session_id = str(body.get("client_history_session_id") or "").strip()
++    if not server_history and client_history_session_id == session_id and isinstance(client_history, list):
+         for item in client_history[-12:]:
+             if not isinstance(item, dict):
+                 continue
+@@ -8062,8 +8157,9 @@
+             "If it corrects Adam, acknowledge the correction briefly, update the working meeting context to the corrected wording, and continue from the corrected fact without defending the earlier transcription. "
+             "If it gives an order/request, confirm what you can do and carry it forward within the current task/meeting; consequential external execution still requires the normal owner-approval boundary. "
+             "Do NOT return IGNORE for this turn unless the hard project-isolation gate already rejected it before reaching the AI. ") if response_required and not direct_question else "") +
++        (("CLARIFICATION FOLLOW-UP: this turn is the participant's reply to Adam's pending clarification" + (" for question id " + clarification_parent_question_id if clarification_parent_question_id else "") + ". Continue the same issue. If the reply still does not provide the decision-critical information, ask one concise follow-up clarification; do not invent the missing data and do not treat the original decision question as resolved. ") if clarification_followup else "") +
+         "IMPORTANT SMART CLARITY GATE: the transcript may contain minor speech-to-text mistakes, substituted technical terms, fragments, accents, or overlapping speech. Prefer a direct professional answer whenever the participant's intended question is clear from the words plus current meeting context. Minor grammar errors, accent artifacts, or one obvious transcription substitution are NOT enough reason to ask for clarification. "
+-        "Ask one concise clarification question only when there are two or more materially different plausible meanings, a required referent is genuinely missing, or answering would risk giving the wrong technical/commercial position. If current context strongly supports one interpretation, answer that interpretation directly; briefly state the assumption only when it materially matters. MISSING PROJECT DATA IS NOT AMBIGUITY: if the question itself is clear but the approved schedule, drawing, calculation, rated value, or other project record is unavailable, use ANSWER:, say that the value cannot be confirmed from the available meeting information, and name the exact document/data needed. Do NOT use CLARIFY: merely because the project data is missing. "
++        "Ask one concise clarification question only when there are two or more materially different plausible meanings, a required referent is genuinely missing, or answering would risk giving the wrong technical/commercial position. If current context strongly supports one interpretation, answer that interpretation directly; briefly state the assumption only when it materially matters. MISSING PROJECT DATA IS NOT AMBIGUITY: if the question itself is clear but the approved schedule, drawing, calculation, rated value, or other project record is unavailable, normally use ANSWER:, say that the value cannot be confirmed from the available meeting information, and name the exact document/data needed. MATERIAL-CHANGE EXCEPTION: when the participant asks whether a material equipment/system change may proceed or be approved and the proposed change itself lacks decision-critical characteristics needed to evaluate it, use CLARIFY: and ask for those characteristics before giving the proceed/approval recommendation. "
+         "If the captured text is clearly just background noise, a greeting, a repeated stray word, or a non-question fragment with no request for Adam, do not create a fake discussion. "
+         "If the participant's intent is clear, answer directly, accurately, professionally, and without unnecessary preamble. Keep normal answers concise (usually 2-6 sentences) unless the participant asks for detail. "
+         "NATURAL PROFESSIONAL DIALOGUE: sound like an experienced colleague in a real meeting, while remaining clearly an AI representative. Start with the actual answer or position, not a formal report introduction. Do not repeat the participant's whole question. Do not automatically turn every answer into a bullet list. Use short connected sentences, natural transitions, and a warm confident tone. Acknowledge a useful point briefly when it helps the discussion, but avoid repetitive phrases such as 'Certainly', 'Absolutely', 'Based on the information provided', or 'As an AI'. "
+@@ -8098,48 +8194,65 @@
+         "\n\nRecent meeting conversation:\n" + ("\n".join(history_lines) or "(none yet)") +
+         "\n\nParticipant interaction:\n" + question
+     )
+-    flight_key = (session_id, question_id)
+-    with _MEETING_AI_INFLIGHT_LOCK:
+-        if flight_key in _MEETING_AI_INFLIGHT:
+-            return jsonify({
+-                "ok": False, "status": "duplicate_turn_in_progress",
+-                "duplicate_suppressed": True, "canonical_question_id": question_id,
+-                "question_id": question_id, "question_coverage": coverage_records[-80:],
+-                "accepted_turn_persisted": True, "owner_gate_preserved": True,
+-                "external_action_executed": False, "version": VERSION,
+-            }), 409
+-        _MEETING_AI_INFLIGHT.add(flight_key)
+-    try:
+-        raw_answer = call_ai(prompt, reply_language, max_tokens=700, timeout=25).strip()
+-        if raw_answer:
++    # v8.4.1.8 — deterministic decision-critical clarification gate. This runs
++    # before the provider so a clear but under-specified pump-change approval
++    # question cannot be marked Answered merely because Adam gave a safe
++    # conditional recommendation.
++    material_change_clarity = _meeting_material_change_clarification(question, direct_question)
++    forced_material_clarification = bool(material_change_clarity.get("required"))
++    if forced_material_clarification:
++        missing_text = ", ".join(material_change_clarity.get("missing") or [])
++        if reply_language.lower().startswith("ar"):
++            raw_answer = "CLARIFY: قبل ما أوصي بالموافقة أو المتابعة، بدي بيانات المضخة المقترحة: نقطة التشغيل (flow و head)، الـ approved pump schedule/model والـ submittal، وسبب التغيير."
++        else:
++            raw_answer = (
++                "CLARIFY: Before I can recommend proceeding, please provide "
++                + (missing_text or "the proposed pump duty point, approved pump reference, proposed submittal, and reason for the change")
++                + "."
++            )
++    else:
++        flight_key = (session_id, question_id)
++        with _MEETING_AI_INFLIGHT_LOCK:
++            if flight_key in _MEETING_AI_INFLIGHT:
++                return jsonify({
++                    "ok": False, "status": "duplicate_turn_in_progress",
++                    "duplicate_suppressed": True, "canonical_question_id": question_id,
++                    "question_id": question_id, "question_coverage": coverage_records[-80:],
++                    "accepted_turn_persisted": True, "owner_gate_preserved": True,
++                    "external_action_executed": False, "version": VERSION,
++                }), 409
++            _MEETING_AI_INFLIGHT.add(flight_key)
++        try:
++            raw_answer = call_ai(prompt, reply_language, max_tokens=700, timeout=25).strip()
++            if raw_answer:
++                _meeting_accepted_turn_upsert(
++                    accepted_turns, question_id=question_id, text=question, focus_status="accepted",
++                    ai_status="provider_response_received", direct_question=direct_question
++                )
++        except Exception as exc:
++            exc_name = type(exc).__name__.lower()
++            exc_text = str(exc).lower()
++            provider_timeout = "timeout" in exc_name or "timed out" in exc_text
++            failure_state = "Unanswered — AI provider timeout" if provider_timeout else "Unanswered — AI provider error"
++            failure_status = "ai_provider_timeout" if provider_timeout else "ai_provider_error"
++            _meeting_coverage_upsert(coverage_records, question_id=question_id, question=question, direct_question=direct_question, state=failure_state)
+             _meeting_accepted_turn_upsert(
+                 accepted_turns, question_id=question_id, text=question, focus_status="accepted",
+-                ai_status="provider_response_received", direct_question=direct_question
++                ai_status=("provider_timeout" if provider_timeout else "provider_error"), direct_question=direct_question
+             )
+-    except Exception as exc:
+-        exc_name = type(exc).__name__.lower()
+-        exc_text = str(exc).lower()
+-        provider_timeout = "timeout" in exc_name or "timed out" in exc_text
+-        failure_state = "Unanswered — AI provider timeout" if provider_timeout else "Unanswered — AI provider error"
+-        failure_status = "ai_provider_timeout" if provider_timeout else "ai_provider_error"
+-        _meeting_coverage_upsert(coverage_records, question_id=question_id, question=question, direct_question=direct_question, state=failure_state)
+-        _meeting_accepted_turn_upsert(
+-            accepted_turns, question_id=question_id, text=question, focus_status="accepted",
+-            ai_status=("provider_timeout" if provider_timeout else "provider_error"), direct_question=direct_question
+-        )
+-        return jsonify({
+-            "ok": False,
+-            "status": failure_status,
+-            "error": str(exc),
+-            "question_id": question_id,
+-            "question_coverage": coverage_records[-80:],
+-            "accepted_turn_persisted": True,
+-            "provider_timeout_seconds": 25,
+-            "version": VERSION,
+-        }), (504 if provider_timeout else 400)
+-    finally:
+-        with _MEETING_AI_INFLIGHT_LOCK:
+-            _MEETING_AI_INFLIGHT.discard(flight_key)
++            return jsonify({
++                "ok": False,
++                "status": failure_status,
++                "error": str(exc),
++                "question_id": question_id,
++                "question_coverage": coverage_records[-80:],
++                "accepted_turn_persisted": True,
++                "provider_timeout_seconds": 25,
++                "version": VERSION,
++            }), (504 if provider_timeout else 400)
++        finally:
++            with _MEETING_AI_INFLIGHT_LOCK:
++                _MEETING_AI_INFLIGHT.discard(flight_key)
+     if not raw_answer:
+         _meeting_coverage_upsert(coverage_records, question_id=question_id, question=question, direct_question=direct_question, state="Unanswered — empty AI response")
+         _meeting_accepted_turn_upsert(
+@@ -8270,6 +8383,7 @@
+         "retained_transcript_items": len(transcript_memory),
+         "session_id_present": bool(session_id),
+         "clarification_requested": clarification_requested,
++        "material_change_clarification_gate": forced_material_clarification,
+         "ignore_requested": ignore_requested,
+         "answer_kind": answer_kind,
+     })
+@@ -8295,6 +8409,7 @@
+         "cross_disciplinary_professional_mode": True,
+         "speech_recognition_clarity_guard": True,
+         "clarification_requested": clarification_requested,
++        "material_change_clarification_gate": forced_material_clarification,
+         "ignore_requested": ignore_requested,
+         "answer_kind": answer_kind,
+         "turn_kind": turn_kind,
+@@ -8306,6 +8421,8 @@
+         "accepted_turn_persisted": True,
+         "single_pairing_id": question_id,
+         "direct_question_detected": bool(direct_question),
++        "clarification_followup": bool(clarification_followup),
++        "clarification_parent_question_id": clarification_parent_question_id,
+         "question_coverage_state": coverage_state,
+         "question_coverage": coverage_records[-80:],
+         "question_coverage_assurance": True,
+@@ -8534,7 +8651,11 @@
+         "single_question_answer_pairing": True,
+         "duplicate_completed_stt_suppression": True,
+         "processing_question_report_state": True,
+-        "smart_end_of_turn_silence_ms": 3200,
++        "decision_critical_clarification_gate": True,
++        "clarification_followup_not_counted_as_new_direct_question": True,
++        "closed_session_tombstone_guard": True,
++        "client_session_epoch_isolation": True,
++        "smart_end_of_turn_silence_ms": 4200,
+         "ai_identity_disclosure_required": True, "may_impersonate_owner": False,
+         "may_make_consequential_commitments_without_separate_approval": False,
+         "real_platform_join_available": False, "rehearsal_mode_available": True,
+@@ -8590,6 +8711,7 @@
+     body = request.get_json(silent=True) or {}
+     sid = str(body.get("session_id") or "").strip()
+     if sid:
++        _meeting_mark_session_closed(sid)
+         _MEETING_CONVERSATION_SESSIONS.pop(sid, None)
+         _MEETING_CONVERSATION_LANGUAGE_PREFS.pop(sid, None)
+         _MEETING_TRANSCRIPT_MEMORY.pop(sid, None)
+@@ -8604,6 +8726,8 @@
+         "ok": True,
+         "status": "meeting_conversation_context_cleared",
+         "session_id": sid,
++        "session_tombstoned": bool(sid),
++        "late_callback_rejection_enabled": True,
+         "version": VERSION,
+     })
+ 
+--- /mnt/data/adam8417/templates/real_meeting_attendance.html	2026-09-10 19:16:28.000000000 +0000
++++ /mnt/data/adam8418/templates/real_meeting_attendance.html	2026-09-10 19:53:11.233634067 +0000
+@@ -49,7 +49,7 @@
+ const transcript=document.getElementById('transcript'); const micStatus=document.getElementById('micStatus'); const modeEl=document.getElementById('mode'); const participantPanel=document.getElementById('participantPanel');
+ const meetingDateTimeEl=document.getElementById('meetingDateTime');if(meetingDateTimeEl&&!meetingDateTimeEl.value){const d=new Date();const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);meetingDateTimeEl.value=local.toISOString().slice(0,16);}
+ let meetingAutoResponseBusy=false;let meetingAutoInFlightKey='';let meetingLastAutoQuestion='';let meetingLastAutoAt=0;let meetingPendingAutoParts=[];let meetingPendingAutoQuestionId='';let meetingPendingAutoTimer=null;let meetingPendingAutoStartedAt=0;let meetingLastAcceptedTranscriptAt=0;let meetingLastFocusCandidateText='';let meetingLastFocusCandidateAt=0;
+-let meetingResponseHistory=[];let meetingQuestionHistory=[];let meetingAwaitingClarification=false;let meetingClarificationPrompt='';let meetingClarificationAt=0;
++let meetingResponseHistory=[];let meetingQuestionHistory=[];let meetingAwaitingClarification=false;let meetingClarificationPrompt='';let meetingClarificationAt=0;let meetingClarificationQuestionId='';
+ let meetingFocusAcceptedCount=0;let meetingFocusRejectedCount=0;let meetingFocusEvents=[];
+ let meetingAddressHoldUntil=0;const MEETING_ADDRESS_HOLD_MS=12000;
+ function rememberAdamVisibleReply(text,clarificationRequested=false){
+@@ -108,11 +108,13 @@
+  box.value='Meeting Focus Lock: '+(meetingFocusLocked()?'ON':'OFF')+'\nAccepted into meeting: '+meetingFocusAcceptedCount+'\nFiltered before formal memory: '+meetingFocusRejectedCount+'\n\n'+last.join('\n\n');box.scrollTop=box.scrollHeight;
+ }
+ async function checkMeetingFocus(q,options={}){
++ const focusSessionId=String(options.sessionId||meetingConversationSessionId);const focusSessionEpoch=Number(options.sessionEpoch||meetingSessionEpoch);
++ if(focusSessionId!==meetingConversationSessionId||focusSessionEpoch!==meetingSessionEpoch)return {accept:false,decision:'reject',reason:'stale prior-meeting callback rejected',stale_session:true};
+  if(modeEl.value!=='owner_representative')return {accept:true,decision:'accept',reason:'focus gate not required outside representative mode'};
+  const lockEl=document.getElementById('meetingFocusLock');const focusLocked=!!(lockEl&&lockEl.checked);
+  if(!focusLocked)return {accept:true,decision:'accept',reason:'meeting focus lock is open'};
+  try{
+-  const r=await fetch('/api/personal-assistant/meeting-conversation/focus-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId,question_id:String(options.questionId||options.utterance_id||''),utterance_id:String(options.questionId||options.utterance_id||''),text:String(q||''),owner_approved:approved(),focus_locked:focusLocked,focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',peak_rms:Number(options.peak_rms||0),noise_floor:Number(options.noise_floor||0),vad_available:!!options.vad_available})});
++  const r=await fetch('/api/personal-assistant/meeting-conversation/focus-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:focusSessionId,question_id:String(options.questionId||options.utterance_id||''),utterance_id:String(options.questionId||options.utterance_id||''),text:String(q||''),owner_approved:approved(),focus_locked:focusLocked,focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',peak_rms:Number(options.peak_rms||0),noise_floor:Number(options.noise_floor||0),vad_available:!!options.vad_available})});
+   const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok){if(explicitOtherProjectReferenceLocal(q))return {accept:false,decision:'reject',reason:'local hard project boundary — explicit other project'};const explicit=(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||meetingAwaitingClarification;return {accept:!!explicit,decision:explicit?'accept':'reject',reason:explicit?'focus service unavailable — explicit substantive Adam/follow-up retained':'focus service unavailable — strict shared-room protection filtered unverified speech'}}renderMeetingFocus(j);return j;
+  }catch(_){if(explicitOtherProjectReferenceLocal(q))return {accept:false,decision:'reject',reason:'local hard project boundary — explicit other project'};const explicit=(wakeNameDetected(q)&&!isWakeOnly(q)&&!isQuestionPreamble(q))||meetingAwaitingClarification;return {accept:!!explicit,decision:explicit?'accept':'reject',reason:explicit?'focus service unavailable — explicit substantive Adam/follow-up retained':'focus service unavailable — strict shared-room protection filtered unverified speech'};}
+ }
+@@ -292,6 +294,8 @@
+  return await triggerAutomaticConversation(combined,{questionId:questionIdForTurn});
+ }
+ async function handleFinalMeetingText(text,options={}){
++ const sourceSessionId=String(options.sessionId||meetingConversationSessionId);const sourceSessionEpoch=Number(options.sessionEpoch||meetingSessionEpoch);
++ if(sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch){micStatus.textContent='Microphone: stale prior-meeting audio ignored';return true;}
+  const q=dedupeConsecutiveTranscriptLines(text); if(!q)return;
+  if(looksLikeAdamSpeakerEcho(q)){micStatus.textContent='Microphone: listening — Adam speaker echo filtered';return;}
+  const now=Date.now(),qKey=normalizeAutoQuestion(q);
+@@ -310,7 +314,7 @@
+  // several fragments separated by natural pauses.
+  const pendingTurnId=(meetingPendingAutoParts.length&&meetingPendingAutoQuestionId)?meetingPendingAutoQuestionId:'';
+  const proposedQuestionId=String(options.questionId||pendingTurnId||newMeetingQuestionId());
+- const focus=await checkMeetingFocus(q,{...options,questionId:proposedQuestionId});
++ const focus=await checkMeetingFocus(q,{...options,questionId:proposedQuestionId,sessionId:sourceSessionId,sessionEpoch:sourceSessionEpoch});
+  if(focus&&focus.session_id)meetingConversationSessionId=String(focus.session_id);
+  const stableQuestionId=String((focus&&focus.question_id)||proposedQuestionId);
+  if(!(focus&&focus.accept===false))setMeetingReplyTrace(1,'speech accepted',stableQuestionId);
+@@ -358,7 +362,7 @@
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){micStatus.textContent='Microphone speech recognition is not supported by this browser. Use manual transcript fallback.';return null;}
+  const r=new SR(); r.continuous=true; r.interimResults=true; const ml=document.getElementById('meetingLanguage').value; r.lang=(ml==='ar-LB')?'ar-LB':(ml==='auto'?(navigator.language||'en-US'):ml);
+- r.onresult=(ev)=>{let finalText='';for(let i=ev.resultIndex;i<ev.results.length;i++){if(ev.results[i].isFinal)finalText+=ev.results[i][0].transcript+'\n';}if(finalText){if(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive){micStatus.textContent='Microphone: Adam speaker echo protected — waiting for his reply to finish';return;}handleFinalMeetingText(finalText);}};
++ r.onresult=(ev)=>{let finalText='';for(let i=ev.resultIndex;i<ev.results.length;i++){if(ev.results[i].isFinal)finalText+=ev.results[i][0].transcript+'\n';}if(finalText){if(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive){micStatus.textContent='Microphone: Adam speaker echo protected — waiting for his reply to finish';return;}handleFinalMeetingText(finalText,{source:'browser_recognition',sessionId:meetingRecognitionSessionId,sessionEpoch:meetingRecognitionSessionEpoch});}};
+  r.onerror=(e)=>{micStatus.textContent='Microphone: '+e.error;}; r.onend=()=>{if(listening){try{r.start();}catch(_){}}else micStatus.textContent='Microphone: stopped';}; return r;
+ }
+ function preferredMeetingMime(){
+@@ -366,15 +370,18 @@
+  for(const t of types){try{if(window.MediaRecorder&&MediaRecorder.isTypeSupported(t))return t;}catch(_){}}
+  return '';
+ }
+-async function transcribeMeetingBlob(blob,captureMs,finalTurn=false,focusSignal={}){
++async function transcribeMeetingBlob(blob,captureMs,finalTurn=false,focusSignal={},captureSessionId=meetingConversationSessionId,captureSessionEpoch=meetingSessionEpoch){
+  if(!blob||!blob.size)return;
++ const sourceSessionId=String(captureSessionId||'');const sourceSessionEpoch=Number(captureSessionEpoch||0);
++ if(sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch)return;
+  const fd=new FormData(); const mime=blob.type||'audio/webm'; const ext=mime.includes('mp4')?'m4a':'webm';
+  fd.append('audio',blob,'meeting.'+ext);fd.append('owner_approved','true');fd.append('language',document.getElementById('meetingLanguage').value);fd.append('capture_ms',String(Math.max(0,Number(captureMs)||0)));fd.append('technical_context',(((document.getElementById('meetingFocusAgenda')||{}).value||'')+' '+((document.getElementById('ownerBriefing')||{}).value||'')+' '+transcript.value.slice(-1200)).slice(-2200));
+  micStatus.textContent='Microphone: listening — transcribing multilingual speech…';
+  try{
+   const r=await fetch('/api/personal-assistant/real-meeting-attendance/transcribe',{method:'POST',body:fd});const j=await r.json();
+   if(!r.ok||!j.ok)throw new Error(j.error||j.status||'meeting_transcription_failed');
+-  if(j.text)await handleFinalMeetingText(j.text,{finalTurn:!!finalTurn,source:'microphone_server',peak_rms:Number(focusSignal.peak_rms||0),noise_floor:Number(focusSignal.noise_floor||0),vad_available:!!focusSignal.vad_available});
++  if(sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch)return;
++  if(j.text)await handleFinalMeetingText(j.text,{finalTurn:!!finalTurn,source:'microphone_server',sessionId:sourceSessionId,sessionEpoch:sourceSessionEpoch,peak_rms:Number(focusSignal.peak_rms||0),noise_floor:Number(focusSignal.noise_floor||0),vad_available:!!focusSignal.vad_available});
+   if(listening)micStatus.textContent='Microphone: listening — multilingual server transcription';
+  }catch(e){micStatus.textContent='Microphone transcription error: '+String(e&&e.message||e);}
+ }
+@@ -415,6 +422,7 @@
+ }
+ function recordNextMultilingualChunk(){
+  if(!listening||!meetingMicStream)return;
++ const recorderSessionId=meetingConversationSessionId;const recorderSessionEpoch=meetingSessionEpoch;
+  const chunks=[]; const mime=preferredMeetingMime();meetingChunkSpeechFrames=0;meetingPeakRms=0;meetingUtteranceSpeechStarted=false;meetingUtteranceLastSpeechAt=0;meetingRecorderStartedAt=Date.now();meetingRecorderStopReason='';meetingRecorderContainsAdamAudio=!!(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive);
+  try{meetingRecorder=new MediaRecorder(meetingMicStream,mime?{mimeType:mime}:undefined);}catch(e){micStatus.textContent='Microphone: MediaRecorder '+e.message;return;}
+  meetingRecorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+@@ -426,7 +434,7 @@
+   const hadSpeech=(!meetingRecorderContainsAdamAudio)&&(!meetingVadAvailable||meetingChunkSpeechFrames>=2);
+   const finalTurn=(meetingRecorderStopReason==='end_of_turn'||meetingRecorderStopReason==='max_utterance');
+   const focusSignal={peak_rms:meetingPeakRms,noise_floor:meetingNoiseFloor,vad_available:meetingVadAvailable,speech_frames:meetingChunkSpeechFrames};
+-  if(blob.size&&hadSpeech){meetingTranscriptionsPending++;meetingTranscriptionQueue=meetingTranscriptionQueue.then(()=>transcribeMeetingBlob(blob,captureMs,finalTurn,focusSignal)).finally(()=>{meetingTranscriptionsPending=Math.max(0,meetingTranscriptionsPending-1);});}
++  if(blob.size&&hadSpeech){meetingTranscriptionsPending++;meetingTranscriptionQueue=meetingTranscriptionQueue.then(()=>transcribeMeetingBlob(blob,captureMs,finalTurn,focusSignal,recorderSessionId,recorderSessionEpoch)).finally(()=>{meetingTranscriptionsPending=Math.max(0,meetingTranscriptionsPending-1);});}
+   else if(listening)micStatus.textContent='Microphone: listening — waiting for speech';
+   if(listening)setTimeout(recordNextMultilingualChunk,(meetingSpeakerProtectionEnabled()&&meetingSpeakerOutputActive)?220:40);
+  };
+@@ -458,6 +466,7 @@
+ document.getElementById('start').onclick=async()=>{
+  primeMeetingVoice();
+  if(!approved()){alert('Owner Approval is required before Adam listens to the meeting.');return;}
++ meetingRecognitionSessionId=meetingConversationSessionId;meetingRecognitionSessionEpoch=meetingSessionEpoch;
+  const ml=document.getElementById('meetingLanguage').value;
+  if(ml==='auto-multilingual'||ml==='auto-bilingual'){
+   const ok=await startMultilingualServerListening();if(ok)return;
+@@ -468,13 +477,14 @@
+ };
+ document.getElementById('stop').onclick=()=>{stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}micStatus.textContent='Microphone: stopped';};
+ document.getElementById('clear').onclick=()=>{transcript.value='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('conversationStatus').textContent='Conversation: transcript screen cleared — Adam retained meeting memory and reply history';document.getElementById('out').textContent='Screen cleared. Meeting memory retained; Adam\'s latest reply, reply history, and participant question history are retained until End Meeting / New Session.';};
+-document.getElementById('endMeeting').onclick=async()=>{if(!confirm('End this meeting and clear Adam\'s temporary meeting memory for this session?'))return;stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}stopAdamSpeechForBargeIn();try{await meetingMemorySyncQueue.catch(()=>{});await fetch('/api/personal-assistant/meeting-conversation/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:meetingConversationSessionId})});}catch(_){ }meetingConversationHistory=[];meetingQuestionQueue=[];meetingAutoResponseBusy=false;meetingAutoInFlightKey='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;meetingLastAutoQuestion='';meetingLastAutoAt=0;meetingLastFocusCandidateText='';meetingLastFocusCandidateAt=0;meetingResponseHistory=[];meetingQuestionHistory=[];meetingDiscussionHistory=[];meetingFocusAcceptedCount=0;meetingFocusRejectedCount=0;meetingFocusEvents=[];meetingAddressHoldUntil=0;meetingAwaitingClarification=false;meetingClarificationPrompt='';meetingClarificationAt=0;meetingConversationSessionId=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);meetingIdentityDeclared=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastVoiceDeliveryOk=false;meetingLastSpokenText='';meetingLastTranscriptText='';meetingLastTranscriptAt=0;transcript.value='';document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('responseDraft').value='';document.getElementById('responseHistory').value='';document.getElementById('questionHistory').value='';document.getElementById('discussionRecord').value='';document.getElementById('meetingRegister').value='';document.getElementById('questionCoverage').value='';if(document.getElementById('focusMonitor'))document.getElementById('focusMonitor').value='';document.getElementById('meetingReport').value='';document.getElementById('conversationStatus').textContent='Conversation: new meeting session ready';document.getElementById('out').textContent='Previous meeting session ended and temporary memory cleared.';resetMeetingReplyTrace();micStatus.textContent='Microphone: stopped';};
++document.getElementById('endMeeting').onclick=async()=>{if(!confirm('End this meeting and clear Adam\'s temporary meeting memory for this session?'))return;const closingSessionId=meetingConversationSessionId;meetingSessionEpoch++;meetingRecognitionSessionEpoch=0;meetingRecognitionSessionId='';stopMultilingualServerListening();if(recognition){try{recognition.stop();}catch(_){}}stopAdamSpeechForBargeIn();if(meetingPendingAutoTimer){clearTimeout(meetingPendingAutoTimer);meetingPendingAutoTimer=null;}try{await meetingTranscriptionQueue.catch(()=>{});await meetingMemorySyncQueue.catch(()=>{});await fetch('/api/personal-assistant/meeting-conversation/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:closingSessionId})});}catch(_){ }meetingConversationHistory=[];meetingQuestionQueue=[];meetingAutoResponseBusy=false;meetingAutoInFlightKey='';meetingPendingAutoParts=[];meetingPendingAutoQuestionId='';meetingPendingAutoStartedAt=0;meetingLastAcceptedTranscriptAt=0;meetingLastAutoQuestion='';meetingLastAutoAt=0;meetingLastFocusCandidateText='';meetingLastFocusCandidateAt=0;meetingResponseHistory=[];meetingQuestionHistory=[];meetingDiscussionHistory=[];meetingFocusAcceptedCount=0;meetingFocusRejectedCount=0;meetingFocusEvents=[];meetingAddressHoldUntil=0;meetingAwaitingClarification=false;meetingClarificationPrompt='';meetingClarificationAt=0;meetingClarificationQuestionId='';meetingConversationSessionId=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);meetingConversationHistorySessionId=meetingConversationSessionId;meetingRecognitionSessionId=meetingConversationSessionId;meetingRecognitionSessionEpoch=meetingSessionEpoch;meetingIdentityDeclared=false;meetingSpeakerOutputActive=false;meetingRecorderContainsAdamAudio=false;meetingLastVoiceDeliveryOk=false;meetingLastSpokenText='';meetingLastTranscriptText='';meetingLastTranscriptAt=0;transcript.value='';document.getElementById('conversationInput').value='';if(document.getElementById('meetingTextQuery'))document.getElementById('meetingTextQuery').value='';if(document.getElementById('meetingTextQueryStatus'))document.getElementById('meetingTextQueryStatus').textContent='Typed meeting input: ready';document.getElementById('responseDraft').value='';document.getElementById('responseHistory').value='';document.getElementById('questionHistory').value='';document.getElementById('discussionRecord').value='';document.getElementById('meetingRegister').value='';document.getElementById('questionCoverage').value='';if(document.getElementById('focusMonitor'))document.getElementById('focusMonitor').value='';document.getElementById('meetingReport').value='';document.getElementById('conversationStatus').textContent='Conversation: new meeting session ready — prior session isolated';document.getElementById('out').textContent='Previous meeting session ended. Late audio/AI callbacks from it will be ignored.';resetMeetingReplyTrace();micStatus.textContent='Microphone: stopped';};
+ document.getElementById('analyze').onclick=async()=>{const text=transcript.value.trim();const segments=text?text.split(/\n+/).filter(Boolean).map(x=>({text:x})):[];const body={platform:document.getElementById('platform').value,mode:document.getElementById('mode').value,owner_approved:approved(),segments};const r=await fetch('/api/personal-assistant/real-meeting-attendance/process',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('out').textContent=JSON.stringify(await r.json(),null,2);};
+ 
+ document.getElementById('prepareResponse').onclick=async()=>{const body={mode:'active_participant',context:transcript.value,response:document.getElementById('responseDraft').value};const r=await fetch('/api/personal-assistant/meeting-conversation/prepare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(j.response)document.getElementById('responseDraft').value=j.response;document.getElementById('speakStatus').textContent=j.ok?'Speaking: preview ready — approval required':'Speaking: '+j.status;};
+ 
+ let meetingConversationHistory=[];
+ let meetingConversationSessionId=(crypto && crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2);
++let meetingConversationHistorySessionId=meetingConversationSessionId;let meetingSessionEpoch=1;let meetingRecognitionSessionId=meetingConversationSessionId;let meetingRecognitionSessionEpoch=meetingSessionEpoch;
+ function meetingVoiceEnabled(){const el=document.getElementById('meetingAutoSpeak');return !el||!!el.checked;}
+ function meetingSpeakerProtectionEnabled(){const el=document.getElementById('meetingSpeakerProtection');return !el||!!el.checked;}
+ function markAdamSpeakerPlaybackStart(){meetingSpeakerOutputActive=true;meetingRecorderContainsAdamAudio=true;meetingChunkSpeechFrames=0;meetingUtteranceSpeechStarted=false;meetingUtteranceLastSpeechAt=0;setMeetingVoiceStatus('speaking — laptop speaker protection active');}
+@@ -597,8 +607,10 @@
+  question=(question||'').trim();if(!question){status.textContent='Conversation: enter or say a question for Adam';return false;}
+  const attempt=Number(options.attempt||0),questionId=String(options.questionId||newMeetingQuestionId());
+  const turnKind=String(options.turnKind||meetingConversationTurnKind(question));
+- const directQuestion=(typeof options.directQuestion==='boolean')?options.directQuestion:(likelyDirectQuestion(question)||meetingAwaitingClarification);
+- const responseRequired=(typeof options.responseRequired==='boolean')?options.responseRequired:(directQuestion||turnKind==='correction'||turnKind==='order'||turnKind==='addressed_comment');
++ const clarificationFollowup=meetingAwaitingClarification&&likelyClarificationReply(question);
++ const directQuestion=(typeof options.directQuestion==='boolean')?options.directQuestion:likelyDirectQuestion(question);
++ const responseRequired=(typeof options.responseRequired==='boolean')?options.responseRequired:(directQuestion||clarificationFollowup||turnKind==='correction'||turnKind==='order'||turnKind==='addressed_comment');
++ const sessionIdAtDispatch=meetingConversationSessionId;const sessionEpochAtDispatch=meetingSessionEpoch;
+  status.textContent=attempt?'Conversation: retrying the participant interaction…':'Conversation: Adam is thinking…';
+  const context=transcript.value.slice(-6000);
+  let r,j;
+@@ -606,11 +618,13 @@
+  let providerWatchdog=null;const providerController=(typeof AbortController!=='undefined')?new AbortController():null;
+  try{
+   if(providerController)providerWatchdog=setTimeout(()=>providerController.abort(),30000);
+-  r=await fetch('/api/personal-assistant/meeting-conversation/ask',{method:'POST',headers:{'Content-Type':'application/json'},signal:providerController?providerController.signal:undefined,body:JSON.stringify({question,question_id:questionId,direct_question:directQuestion,turn_kind:turnKind,response_required:responseRequired,meeting_context:context,messages:meetingConversationHistory.slice(-10),session_id:meetingConversationSessionId,owner_approved:sessionApproved,representative_mode:representativeMode,owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',authority_profile:(document.getElementById('authorityProfile')||{}).value||'',professional_scope:(document.getElementById('professionalScope')||{}).value||'auto',participation_style:(document.getElementById('participationStyle')||{}).value||'balanced',proactive_reason:proactiveInterventionReason(question),meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',focus_locked:meetingFocusLocked(),focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',continuity_memory:document.getElementById('meetingContinuityMemory').checked,language:document.getElementById('meetingLanguage').value})});
++  r=await fetch('/api/personal-assistant/meeting-conversation/ask',{method:'POST',headers:{'Content-Type':'application/json'},signal:providerController?providerController.signal:undefined,body:JSON.stringify({question,question_id:questionId,direct_question:directQuestion,turn_kind:turnKind,response_required:responseRequired,clarification_followup:clarificationFollowup,clarification_parent_question_id:meetingClarificationQuestionId,meeting_context:context,messages:meetingConversationHistory.slice(-10),client_history_session_id:meetingConversationHistorySessionId,session_id:sessionIdAtDispatch,owner_approved:sessionApproved,representative_mode:representativeMode,owner_briefing:(document.getElementById('ownerBriefing')||{}).value||'',authority_profile:(document.getElementById('authorityProfile')||{}).value||'',professional_scope:(document.getElementById('professionalScope')||{}).value||'auto',participation_style:(document.getElementById('participationStyle')||{}).value||'balanced',proactive_reason:proactiveInterventionReason(question),meeting_title:(document.getElementById('meetingTitle')||{}).value||'',project_reference:(document.getElementById('projectReference')||{}).value||'',participants:(document.getElementById('meetingParticipants')||{}).value||'',focus_agenda:(document.getElementById('meetingFocusAgenda')||{}).value||'',focus_locked:meetingFocusLocked(),focus_sensitivity:(document.getElementById('focusSensitivity')||{}).value||'strict',continuity_memory:document.getElementById('meetingContinuityMemory').checked,language:document.getElementById('meetingLanguage').value})});
+   j=await r.json().catch(()=>({}));
+  }catch(e){const aborted=!!(e&&e.name==='AbortError');j={status:aborted?'client_ai_provider_timeout':'meeting_ai_request_failed',error:String(e&&e.message||e)};r={ok:false};}
+  finally{if(providerWatchdog)clearTimeout(providerWatchdog);}
+- if(j&&j.session_id)meetingConversationSessionId=j.session_id;if(j&&j.question_coverage)renderQuestionCoverage(j.question_coverage);
++ if(sessionIdAtDispatch!==meetingConversationSessionId||sessionEpochAtDispatch!==meetingSessionEpoch){status.textContent='Conversation: stale prior-meeting response ignored';return false;}
++ if(j&&j.session_id&&String(j.session_id)!==sessionIdAtDispatch){status.textContent='Conversation: mismatched meeting-session response ignored';return false;}
++ if(j&&j.question_coverage)renderQuestionCoverage(j.question_coverage);
+  if(!r.ok){
+   if(j&&j.duplicate_suppressed){status.textContent='Conversation: duplicate participant turn suppressed — waiting for the original Adam response';return true;}
+   if(j&&(j.status==='ai_provider_timeout'||j.status==='client_ai_provider_timeout')){setMeetingReplyTrace(4,'AI provider timeout — question retained',questionId);status.textContent='Conversation: AI provider timed out — question retained. Open AI Settings and run Test AI Connection before repeating it.';document.getElementById('out').textContent='AI provider timeout. The accepted meeting question was retained; no duplicate was created.';return false;}
+@@ -650,6 +664,7 @@
+  meetingAwaitingClarification=clarificationRequested;
+  meetingClarificationPrompt=clarificationRequested?answer:'';
+  meetingClarificationAt=clarificationRequested?Date.now():0;
++ meetingClarificationQuestionId=clarificationRequested?String(j.question_id||questionId):'';
+  const replyLocale=(j.reply_tts_locale||'en-US').toString();
+  const identityIntro=replyLocale==='ar-LB'?'أنا آدم، ممثل محمد بالذكاء الاصطناعي. ':"I am Adam, Mohamad's AI meeting representative. ";
+  const spoken=meetingIdentityDeclared?answer:(identityIntro+answer);
+--- /dev/null	2026-09-10 19:10:50.879286831 +0000
++++ /mnt/data/adam8418/tests/test_meeting_clarification_context_isolation_v8418.py	2026-09-10 19:54:39.739979334 +0000
+@@ -0,0 +1,120 @@
++from pathlib import Path
++import ast
++import re
++
++ROOT = Path(__file__).resolve().parents[1]
++APP = (ROOT / "app.py").read_text(encoding="utf-8")
++HTML = (ROOT / "templates" / "real_meeting_attendance.html").read_text(encoding="utf-8")
++
++
++def _load_material_change_helper():
++    tree = ast.parse(APP)
++    node = next(
++        n for n in tree.body
++        if isinstance(n, ast.FunctionDef) and n.name == "_meeting_material_change_clarification"
++    )
++    module = ast.Module(body=[node], type_ignores=[])
++    ast.fix_missing_locations(module)
++    ns = {"re": re}
++    exec(compile(module, str(ROOT / "app.py"), "exec"), ns, ns)
++    return ns["_meeting_material_change_clarification"]
++
++
++def test_version_bumped():
++    assert 'VERSION = "v8.4.1.8"' in APP
++
++
++def test_under_specified_pump_change_requires_clarification():
++    gate = _load_material_change_helper()
++    result = gate(
++        "Adam, the contractor wants to change the chilled-water pump. Can they proceed?",
++        True,
++    )
++    assert result["required"] is True
++    assert result["reason"] == "material_pump_change_missing_decision_data"
++    assert any("flow and head" in item for item in result["missing"])
++
++
++def test_complete_pump_change_data_does_not_force_clarification():
++    gate = _load_material_change_helper()
++    result = gate(
++        "Can they proceed with the replacement pump at 25 l/s and 180 kPa head per the approved pump schedule and proposed submittal?",
++        True,
++    )
++    assert result["required"] is False
++    assert result["reason"] == "decision_data_present"
++
++
++def test_normal_pump_explanation_does_not_force_clarification():
++    gate = _load_material_change_helper()
++    result = gate("What is the function of a chilled-water pump?", True)
++    assert result["required"] is False
++
++
++def test_material_change_gate_runs_before_provider_and_routes_clarify():
++    gate_pos = APP.index("material_change_clarity = _meeting_material_change_clarification")
++    provider_pos = APP.index("raw_answer = call_ai(prompt, reply_language, max_tokens=700, timeout=25).strip()")
++    assert gate_pos < provider_pos
++    assert 'raw_answer = "CLARIFY:' in APP
++    assert '"material_change_clarification_gate": forced_material_clarification' in APP
++    assert "MATERIAL-CHANGE EXCEPTION" in APP
++
++
++def test_clarification_reply_is_not_automatically_counted_as_direct_question():
++    assert "const clarificationFollowup=meetingAwaitingClarification&&likelyClarificationReply(question);" in HTML
++    assert "?options.directQuestion:likelyDirectQuestion(question);" in HTML
++    assert "likelyDirectQuestion(question)||meetingAwaitingClarification" not in HTML
++    assert "directQuestion||clarificationFollowup||turnKind==='correction'" in HTML
++
++
++def test_clarification_followup_is_bound_to_parent_without_resolving_by_guess():
++    assert "meetingClarificationQuestionId" in HTML
++    assert "clarification_parent_question_id:meetingClarificationQuestionId" in HTML
++    assert "CLARIFICATION FOLLOW-UP" in APP
++    assert "do not treat the original decision question as resolved" in APP
++
++
++def test_new_meeting_uses_client_session_epoch_and_stale_audio_guard():
++    assert "let meetingConversationHistorySessionId=meetingConversationSessionId;let meetingSessionEpoch=1" in HTML
++    assert "stale prior-meeting audio ignored" in HTML
++    assert "sourceSessionId!==meetingConversationSessionId||sourceSessionEpoch!==meetingSessionEpoch" in HTML
++    assert "recorderSessionId=meetingConversationSessionId" in HTML
++    assert "recorderSessionEpoch=meetingSessionEpoch" in HTML
++
++
++def test_late_ai_response_cannot_rebind_new_session():
++    assert "const sessionIdAtDispatch=meetingConversationSessionId;const sessionEpochAtDispatch=meetingSessionEpoch;" in HTML
++    assert "stale prior-meeting response ignored" in HTML
++    assert "mismatched meeting-session response ignored" in HTML
++    assert "session_id:sessionIdAtDispatch" in HTML
++
++
++def test_end_meeting_waits_for_old_transcription_then_resets_and_rotates_session():
++    end = HTML.split("document.getElementById('endMeeting').onclick", 1)[1].split("document.getElementById('analyze').onclick", 1)[0]
++    assert "const closingSessionId=meetingConversationSessionId" in end
++    assert "meetingSessionEpoch++" in end
++    assert "await meetingTranscriptionQueue.catch(()=>{})" in end
++    assert "session_id:closingSessionId" in end
++    assert "meetingConversationHistorySessionId=meetingConversationSessionId" in end
++    assert "Late audio/AI callbacks from it will be ignored" in end
++
++
++def test_server_tombstones_closed_sessions_and_rejects_late_callbacks():
++    assert "_MEETING_CLOSED_SESSIONS = {}" in APP
++    assert "def _meeting_session_is_closed" in APP
++    assert "_meeting_mark_session_closed(sid)" in APP
++    assert APP.count('"status": "meeting_session_closed"') >= 3
++    assert '"stale_callback_rejected": True' in APP
++
++
++def test_client_history_recovery_cannot_cross_session_boundary():
++    assert "client_history_session_id = str(body.get(\"client_history_session_id\") or \"\").strip()" in APP
++    assert "client_history_session_id == session_id" in APP
++    assert "client_history_session_id:meetingConversationHistorySessionId" in HTML
++
++
++def test_existing_owner_governance_boundaries_remain_present():
++    assert "must NOT approve variations" in APP
++    assert "owner_gate_preserved" in APP
++    assert "consequential_commitments_blocked" in APP
++    assert "approval_status_consistency_guard" in APP

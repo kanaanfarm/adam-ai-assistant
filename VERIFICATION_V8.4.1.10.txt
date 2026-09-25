@@ -1,0 +1,19 @@
+Adam Acquisition v8.4.1.10 targeted verification
+
+1. VERSION is v8.4.1.10 — PASS
+2. Protected end-of-turn boundary remains 4200 ms — PASS
+3. Fast end-of-turn boundary remains 2400 ms — PASS
+4. Fast-turn maximum speech span is 12000 ms — PASS
+5. Fast/protected turn mode is recorded in latency telemetry — PASS
+6. In-flight AI timing is protected from microphone trace reset — PASS
+7. Full latency renderer still includes total-to-voice-start — PASS
+8. Full latency renderer still includes STT — PASS
+9. Full latency renderer still includes focus/merge — PASS
+10. Full latency renderer still includes AI — PASS
+11. Full latency renderer still includes voice prep — PASS
+12. Provider timing remains displayed when supplied — PASS
+13. v8.4.1.9 factual fast-path marker remains present — PASS
+14. Python compile — PASS
+15. Meeting-page JavaScript syntax — PASS
+
+Automated/static verification only. Physical latency depends on the deployed computer, browser, microphone, network, STT provider and AI provider.
