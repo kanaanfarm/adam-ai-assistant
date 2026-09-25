@@ -34,6 +34,7 @@ input{flex:1;padding:12px 14px;border:1px solid #bbb;border-radius:10px;min-widt
 .stockDash{max-width:900px;margin:10px auto 0;background:#fff;border:1px solid #d1d5db;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
 .stockDashTop{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}.stockTitle{font-weight:900;font-size:16px}.stockMeta{font-size:12px;color:#6b7280}.stockHeadline{font-weight:800;margin:10px 0;padding:10px;border-radius:9px;background:#f8fafc}.stockMetrics{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:9px 0}.stockMetric{border:1px solid #e5e7eb;border-radius:9px;padding:8px;background:#fff}.stockMetric span{display:block;font-size:10px;color:#6b7280}.stockMetric b{display:block;font-size:14px;margin-top:2px}.stockPanels{display:grid;grid-template-columns:1.15fr 1fr;gap:9px}.stockPanel{border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fafafa}.stockPanelTitle{font-size:12px;font-weight:800;margin-bottom:7px}.stockAdvice{display:grid;gap:6px}.stockChip{border:1px solid #e5e7eb;border-radius:8px;padding:7px 8px;background:#fff;font-size:11px;line-height:1.35}.stockChip b{margin-right:5px}.stockBuy{color:#067647}.stockSell{color:#b42318}.stockHold{color:#b54708}.stockWait{color:#175cd3}.stockRefresh{padding:7px 10px;font-size:12px}.stockLink{font-size:12px;color:#111827;font-weight:700}.stockError{color:#b42318;font-size:12px}.stockRegime{font-weight:800}.stockPositive{color:#067647}.stockNegative{color:#b42318}.stockNeutral{color:#b54708}.stockTable{width:100%;border-collapse:collapse}.stockTable th,.stockTable td{font-size:10px;padding:5px 3px;border-bottom:1px solid #e5e7eb;text-align:left}.stockTable th{color:#6b7280}.stockFooter{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px}.stockUrgent{animation:stockPulse 1.3s ease-in-out infinite}@keyframes stockPulse{0%,100%{box-shadow:0 0 0 0 rgba(180,35,24,0)}50%{box-shadow:0 0 0 3px rgba(180,35,24,.12)}}@media(max-width:800px){.stockMetrics{grid-template-columns:repeat(3,1fr)}.stockPanels{grid-template-columns:1fr}}
 .menuBtn{display:none;padding:8px 11px;font-size:20px}
+.mobileMoreBtn{display:none}
 .navOverlay{display:none}
 @media(max-width:780px){
  body{overflow:hidden}
@@ -56,6 +57,21 @@ input{flex:1;padding:12px 14px;border:1px solid #bbb;border-radius:10px;min-widt
  .inputrow input{width:100%;min-width:0}
  .state{margin-bottom:6px;padding:7px 9px}
  .composer>.small{font-size:10px}
+ /* Keep the conversation and input visible on a phone. Expand optional controls on demand. */
+ .mobileMoreBtn{display:block;width:100%;margin:0 auto 6px;padding:9px 12px;text-align:left;font-weight:700}
+ .composer>.tools>:not(#mic):not(#stopMic),
+ .composer>.attachmentBar,.composer>.attachmentHint,.composer>.small{display:none}
+ .composer.mobileExpanded{max-height:58dvh;overflow-y:auto;overscroll-behavior:contain}
+ .composer>.tools>:not(#mic):not(#stopMic){display:none!important}
+ .composer.mobileExpanded>.tools>:not(#mic):not(#stopMic){display:block!important}
+ .composer.mobileExpanded>.tools>label{display:flex!important}
+ .composer.mobileExpanded>.attachmentBar{display:flex}
+ .composer.mobileExpanded>.attachmentHint,.composer.mobileExpanded>.small{display:block}
+ .composer{display:flex;flex-direction:column}
+ .composer>.state{width:100%}
+ .composer>.inputrow{width:100%;order:10;position:sticky;bottom:0;background:#fff;padding-top:4px}
+ .composer>.attachmentPreview:not(:empty){max-height:90px;overflow-y:auto}
+ .inputrow input{font-size:16px}
 }
 
 .cameraModal[hidden]{display:none!important}.cameraModal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:14px}
@@ -285,8 +301,9 @@ main .card:has(h3){font-size:14px}
 <div class="msg assistant">Adam Acquisition {{ version }} is ready. Ask Adam to prepare a WhatsApp message, then review and approve it before sending.</div></div>
 <div class="composer">
 <div id="state" class="state">Ready</div>
+<button id="mobileMoreBtn" class="mobileMoreBtn" type="button" aria-expanded="false" aria-controls="adamMobileOptions">More options ▾</button>
 <div class="small" style="max-width:900px;margin:0 auto 6px">Voice identity: Adam Lebanese 2 + 4 across all languages; only pronunciation changes by language.</div>
-<div class="tools">
+<div class="tools" id="adamMobileOptions">
 <select id="language">
 <option value="auto">Auto — reply in my language</option>
 <option value="en-US">English</option>
@@ -923,6 +940,12 @@ if(SR){
 const menuBtn=document.getElementById('menuBtn');
 const sideNav=document.querySelector('aside');
 const navOverlay=document.getElementById('navOverlay');
+const mobileMoreBtn=document.getElementById('mobileMoreBtn');
+mobileMoreBtn.addEventListener('click',()=>{
+ const expanded=document.querySelector('.composer').classList.toggle('mobileExpanded');
+ mobileMoreBtn.setAttribute('aria-expanded',String(expanded));
+ mobileMoreBtn.textContent=expanded?'Fewer options ▴':'More options ▾';
+});
 function closeMenu(){sideNav.classList.remove('open');navOverlay.classList.remove('open')}
 menuBtn.addEventListener('click',()=>{sideNav.classList.toggle('open');navOverlay.classList.toggle('open')});
 navOverlay.addEventListener('click',closeMenu);
