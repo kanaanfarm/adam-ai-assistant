@@ -18,7 +18,7 @@ class OwnerGate:
     def __call__(self, environ, start_response):
         password = os.environ.get("ADAM_OWNER_PASSWORD", "")
         username = os.environ.get("ADAM_OWNER_USER", "adam")
-        if len(password) < 20:
+        if len(password) < 10:
             return self._reply(start_response, "503 Service Unavailable", b"Owner password is not configured.\n")
 
         header = environ.get("HTTP_AUTHORIZATION", "")
