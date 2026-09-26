@@ -2692,7 +2692,7 @@ def assistant_chat_api():
     if not text:
         return jsonify({"ok": False, "error": "Enter a message or translation request."}), 400
 
-    language_code = str(body.get("response_language") or "auto").strip()
+    language_code = str(body.get("response_language") or "ar-LB").strip()
     language_name = LANGUAGE_NAMES.get(language_code, language_code or "the user's language")
     history = body.get("messages") or []
     contacts_for_intent = load_contacts()
