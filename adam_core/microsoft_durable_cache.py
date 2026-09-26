@@ -1,8 +1,11 @@
 """Encrypted Microsoft token cache for deployments with an external Postgres DB.
 
-Set MICROSOFT_DATABASE_URL and MICROSOFT_TOKEN_ENCRYPTION_KEY in the server's
-environment. Neither the database URL nor the key belongs in source control.
+Set MICROSOFT_DATABASE_URL in the server's environment. Use a dedicated
+MICROSOFT_TOKEN_ENCRYPTION_KEY when available; otherwise derive one from the
+owner password. Never place the database URL or secrets in source control.
 """
+import base64
+import hashlib
 import os
 
 
@@ -12,7 +15,14 @@ def _configuration():
         return None
     key = os.getenv("MICROSOFT_TOKEN_ENCRYPTION_KEY", "").strip()
     if not key:
-        raise RuntimeError("MICROSOFT_TOKEN_ENCRYPTION_KEY is required when MICROSOFT_DATABASE_URL is set")
+        owner_password = os.getenv("ADAM_OWNER_PASSWORD", "")
+        if len(owner_password) < 20:
+            raise RuntimeError("Set MICROSOFT_TOKEN_ENCRYPTION_KEY or a 20-character ADAM_OWNER_PASSWORD")
+        derived = hashlib.pbkdf2_hmac(
+            "sha256", owner_password.encode("utf-8"),
+            b"adam-microsoft-token-cache-v1", 390000,
+        )
+        key = base64.urlsafe_b64encode(derived).decode("ascii")
     from cryptography.fernet import Fernet
     try:
         cipher = Fernet(key.encode("ascii"))
