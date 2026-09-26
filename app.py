@@ -4498,8 +4498,11 @@ def ms_start_device_flow():
     return safe
 
 def ms_status():
-    if ms_access_token():
-        return {"status": "connected"}
+    try:
+        if ms_access_token():
+            return {"status": "connected"}
+    except Exception:
+        return {"status": "error", "error": "Microsoft storage unavailable. Check the Neon connection in Render Environment."}
     return MS_IDENTITY_STATE.status()
 
 def microsoft_sender_label():
