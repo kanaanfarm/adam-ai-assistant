@@ -10,3 +10,7 @@ services:
         sync: false
       - key: ADAM_OWNER_USER
         value: adam
+      - key: MICROSOFT_DATABASE_URL
+        sync: false
+      - key: MICROSOFT_TOKEN_ENCRYPTION_KEY
+        sync: false
