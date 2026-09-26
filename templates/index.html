@@ -11,6 +11,7 @@
 :root{font-family:Arial,sans-serif;color:#111827;background:#f3f4f6}*{box-sizing:border-box}body{margin:0}
 .app{min-height:100vh;display:grid;grid-template-columns:240px 1fr}aside{background:#111827;color:white;padding:18px 12px}
 aside h1{font-size:19px;margin:0 0 20px}.module{display:block;color:white;text-decoration:none;padding:11px 12px;border-radius:8px;margin:4px 0;cursor:pointer}.module:hover,.module.active{background:#374151}
+.navMore{border-top:1px solid #374151;margin-top:12px;padding-top:8px}.navMore summary{font-weight:700}.navMore[open] summary{background:#374151}.navMore a.module{margin-left:12px;font-size:14px}
 main{display:flex;flex-direction:column;min-width:0}header{background:white;padding:14px 18px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;gap:12px;align-items:center}
 .ok{color:#067647}.warn{color:#b54708}.chat{flex:1;overflow:auto;padding:20px}.msg{max-width:850px;padding:12px 14px;border-radius:12px;margin:8px auto;white-space:pre-wrap;line-height:1.45}.user{background:#dbeafe}.assistant{background:white;border:1px solid #e5e7eb}
 .waReview{max-width:850px;margin:8px auto;padding:16px;background:#fff;border:2px solid #25d366;border-radius:12px}.waGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.waReview label{display:block;font-weight:700;margin:8px 0 4px}.waReview input,.waReview textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px}.waReview textarea{min-height:100px;resize:vertical}.waApprove{display:flex;align-items:center;gap:8px;margin:12px 0}.waApprove input{width:auto}.waStatus{font-weight:700;margin-top:10px}.waSend{background:#075e54;color:#fff;border:0;border-radius:8px;padding:11px 15px;font-weight:700}.waSend:disabled{opacity:.55}@media(max-width:650px){.waGrid{grid-template-columns:1fr}}
@@ -235,14 +236,28 @@ main .card:has(h3){font-size:14px}
 <a class="module" href="/email">Email</a>
 <a class="module" href="/inbox">Inbox AI</a>
 <a class="module" href="/followups">Follow-Ups</a>
-<a class="module" href="/acquisition">Acquisition Center</a>
 <a class="module" href="/microsoft">Microsoft Outlook</a>
-<a class="module" href="/contacts">Contacts</a><a class="module" href="/calendar">Calendar</a><a class="module" href="/translator">Translator</a><a class="module" href="/sales">Sales</a><a class="module" href="/documents">Documents</a><a class="module" href="/calling-invitations">Calling & Invitations</a>
-<a class="module" href="/meeting-attendance">Meeting Attendance / Representative</a><a class="module" href="/autonomous-meeting-attendance">Autonomous Meeting Attendance</a><a class="module" href="/cross-app-personal-operator">Cross-App Operator</a><a class="module" href="/production-reliability">Production Reliability</a><a class="module" href="/security-privacy-certification">Security & Privacy</a><a class="module" href="/production-commercial-release">Final Release</a>
+<a class="module" href="/contacts">Contacts</a>
+<a class="module" href="/calendar">Calendar</a>
+<a class="module" href="/meeting-attendance">Meetings</a>
+<a class="module" href="/whatsapp">WhatsApp</a>
+<a class="module" href="/documents">Documents</a>
+<details class="navMore"><summary class="module">More options</summary>
+<a class="module" href="/translator">Translator</a>
+<a class="module" href="/sales">Sales</a>
+<a class="module" href="/calling-invitations">Calling &amp; Invitations</a>
+<a class="module" href="/autonomous-meeting-attendance">Autonomous Meetings</a>
 <a class="module" href="/guest-voice">Guest Voice</a>
-<a class="module" href="/whatsapp">WhatsApp</a><a class="module" href="/voice-studio">Voice Studio</a><a class="module" href="/owner-control">Owner Control</a>
+<a class="module" href="/voice-studio">Voice Studio</a>
+<a class="module" href="/cross-app-personal-operator">Cross-App Operator</a>
+<a class="module" href="/owner-control">Owner Control</a>
 <a class="module" href="/ai-settings">AI Settings</a>
 <a class="module" href="/mobile-setup">Install on Phone</a>
+<a class="module" href="/acquisition">Acquisition Center</a>
+<a class="module" href="/production-reliability">Production Reliability</a>
+<a class="module" href="/security-privacy-certification">Security &amp; Privacy</a>
+<a class="module" href="/production-commercial-release">Final Release</a>
+</details>
 </aside>
 <main>
 <header><button id="menuBtn" class="menuBtn" aria-label="Menu">☰</button><div><strong>{{ app_name }} {{ version }}</strong><div class="small">Voice conversation build</div></div>
