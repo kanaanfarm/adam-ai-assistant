@@ -37,6 +37,7 @@ from adam_core.service_boundaries import build_service_boundary_manifest, servic
 from adam_core.connector_boundaries import build_connector_boundary_manifest, connector_boundaries_are_privacy_safe
 from adam_core.connectors import execute_email as core_execute_email, execute_calendar as core_execute_calendar, execute_whatsapp as core_execute_whatsapp, self_test as connector_adapter_self_test, ConnectorValidationError
 from adam_core.microsoft_identity import MicrosoftIdentityState, load_client_config as core_ms_load_config, save_client_config as core_ms_save_config, load_serialized_cache as core_ms_load_serialized_cache, persist_serialized_cache as core_ms_persist_serialized_cache
+from adam_core import microsoft_durable_cache as ms_durable_cache
 from adam_core.identity_boundary import build_identity_boundary_manifest, identity_boundary_is_privacy_safe, identity_boundary_self_test
 from adam_core.whatsapp_boundary import load_config as core_wa_load_config, save_config as core_wa_save_config, public_status as core_wa_public_status, normalize_number as core_wa_normalize_number, verify_challenge as core_wa_verify_challenge, verify_signature as core_wa_verify_signature, project_incoming_messages as core_wa_project_incoming_messages, append_jsonl as core_wa_append_jsonl, public_boundary_state as core_wa_public_boundary_state
 from adam_core.whatsapp_boundary_evidence import build_whatsapp_boundary_manifest, whatsapp_boundary_is_privacy_safe, whatsapp_boundary_self_test
@@ -1962,7 +1963,7 @@ def adam_acquisition_identity_boundary_v190():
     payload = build_identity_boundary_manifest(
         version=VERSION,
         client_configured=bool(ms_load_config().get("client_id")),
-        token_cache_present=MS_TOKEN_CACHE_FILE.exists() and MS_TOKEN_CACHE_FILE.stat().st_size > 0,
+        token_cache_present=ms_cache_present(),
     )
     return jsonify({"ok": True, "version": VERSION, "privacy_safe": identity_boundary_is_privacy_safe(payload), "identity_boundary": payload})
 
@@ -1976,7 +1977,7 @@ def adam_acquisition_identity_boundary_download_v190():
     payload = build_identity_boundary_manifest(
         version=VERSION,
         client_configured=bool(ms_load_config().get("client_id")),
-        token_cache_present=MS_TOKEN_CACHE_FILE.exists() and MS_TOKEN_CACHE_FILE.stat().st_size > 0,
+        token_cache_present=ms_cache_present(),
     )
     body = json.dumps({"ok": True, "version": VERSION, "privacy_safe": identity_boundary_is_privacy_safe(payload), "identity_boundary": payload}, indent=2)
     response = app.response_class(body, mimetype="application/json")
@@ -4422,7 +4423,7 @@ def ms_token_cache():
     if msal is None:
         return None
     cache = msal.SerializableTokenCache()
-    serialized = core_ms_load_serialized_cache(MS_TOKEN_CACHE_FILE)
+    serialized = ms_durable_cache.load() if ms_durable_cache.enabled() else core_ms_load_serialized_cache(MS_TOKEN_CACHE_FILE)
     if serialized:
         try:
             cache.deserialize(serialized)
@@ -4432,7 +4433,15 @@ def ms_token_cache():
 
 def ms_persist_cache(cache):
     if cache is not None and cache.has_state_changed:
-        core_ms_persist_serialized_cache(MS_TOKEN_CACHE_FILE, cache.serialize())
+        if ms_durable_cache.enabled():
+            ms_durable_cache.save(cache.serialize())
+        else:
+            core_ms_persist_serialized_cache(MS_TOKEN_CACHE_FILE, cache.serialize())
+
+def ms_cache_present():
+    if ms_durable_cache.enabled():
+        return bool(ms_durable_cache.load())
+    return MS_TOKEN_CACHE_FILE.exists() and MS_TOKEN_CACHE_FILE.stat().st_size > 0
 
 def ms_app():
     if msal is None:
@@ -4736,6 +4745,8 @@ def microsoft_status_v06923():
 @app.route("/api/microsoft/disconnect", methods=["POST"], endpoint="microsoft_disconnect_v06923")
 def microsoft_disconnect_v06923():
     try:
+        if ms_durable_cache.enabled():
+            ms_durable_cache.clear()
         if MS_TOKEN_CACHE_FILE.exists():
             MS_TOKEN_CACHE_FILE.unlink()
         MS_IDENTITY_STATE.reset()
