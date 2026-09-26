@@ -41,6 +41,8 @@ input{flex:1;padding:12px 14px;border:1px solid #bbb;border-radius:10px;min-widt
  .app{display:block;min-height:100dvh}
  main{height:100dvh;width:100%;display:flex}
  aside{display:block;position:fixed;z-index:20;left:0;top:0;bottom:0;width:min(82vw,300px);
+       overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+       padding-bottom:calc(24px + env(safe-area-inset-bottom));
        transform:translateX(-105%);transition:transform .2s ease;box-shadow:8px 0 25px rgba(0,0,0,.2)}
  aside.open{transform:translateX(0)}
  .navOverlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:19}
