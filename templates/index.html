@@ -445,6 +445,8 @@ async function refreshStockDashboard(speakAlert=false){
 let currentAudio=null;
 let adamVoicePrimed=false;
 let sendInFlight=false;
+let voiceSessionId=0;
+let voiceAutoSentSession=0;
 
 function primeAdamVoice(){
  if(adamVoicePrimed || !('speechSynthesis' in window))return;
@@ -538,7 +540,9 @@ async function speakCharacter(text){
    currentAudio.onerror=()=>{setState('Voice playback error');URL.revokeObjectURL(url);currentAudio=null};
    await currentAudio.play();
  }catch(e){
-   speakWithDevice(text,e.message);
+   // Do not silently jump from Adam Lebanese Voice 2 + 4 to an unrelated
+   // browser/device speaker. Preserve voice identity across every reply.
+   setState('Adam Lebanese voice unavailable — tap Assistant Voice to retry');
  }
 }
 
@@ -826,6 +830,8 @@ if(SR){
 
  rec.onstart=()=>{
    listening=true;
+   voiceSessionId+=1;
+   voiceAutoSentSession=0;
    voiceFinalBuffer='';
    setState('Listening…');
    mic.classList.add('micActive');
@@ -878,10 +884,15 @@ if(SR){
    if(captured){
      input.value=captured;
      if(shouldAutoSend){
+       // iPhone/WebKit can fire more than one end/final callback for one spoken turn.
+       // Allow exactly one automatic AI request for each microphone session.
+       const thisSession=voiceSessionId;
+       if(voiceAutoSentSession===thisSession)return;
+       voiceAutoSentSession=thisSession;
        setState('Voice command received — Adam is processing…');
        clearTimeout(voiceAutoSendTimer);
        voiceAutoSendTimer=setTimeout(()=>{
-         if(!sendBtn.disabled && input.value.trim()){
+         if(voiceAutoSentSession===thisSession && !sendBtn.disabled && input.value.trim()){
            send();
          }
        },350);
