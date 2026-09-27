@@ -444,6 +444,9 @@ async function refreshStockDashboard(speakAlert=false){
 
 let currentAudio=null;
 let adamVoicePrimed=false;
+let adamAudioPrimed=false;
+const adamVoiceAudio=new Audio();
+adamVoiceAudio.preload='auto';
 let sendInFlight=false;
 let voiceSessionId=0;
 let voiceAutoSentSession=0;
@@ -455,6 +458,17 @@ function primeAdamVoice(){
    u.volume=0;
    speechSynthesis.speak(u);
    adamVoicePrimed=true;
+ }catch(_){ }
+}
+
+function primeAdamAudio(){
+ if(adamAudioPrimed)return;
+ try{
+   // Reuse this same HTMLAudioElement for server TTS. iOS allows later playback
+   // more reliably when the element was first activated by a real tap/key gesture.
+   adamVoiceAudio.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+   const p=adamVoiceAudio.play();
+   if(p&&p.then)p.then(()=>{adamVoiceAudio.pause();adamVoiceAudio.currentTime=0;adamAudioPrimed=true}).catch(()=>{});
  }catch(_){ }
 }
 
@@ -516,6 +530,7 @@ async function adamUnifiedVoiceProfile(){
 async function speakCharacter(text){
  if(!voiceOn){setState('Ready');return}
  if(currentAudio){try{currentAudio.pause()}catch(e){} currentAudio=null}
+ try{adamVoiceAudio.pause()}catch(e){}
  setState('Generating Lebanese character voice…');
  try{
    const r=await fetch('/api/tts',{
@@ -533,12 +548,14 @@ async function speakCharacter(text){
    }
    const blob=await r.blob();
    const url=URL.createObjectURL(blob);
-   currentAudio=new Audio(url);
+   currentAudio=adamVoiceAudio;
    const source=r.headers.get('X-Adam-Voice-Source');
    currentAudio.onplay=()=>setState(source==='windows'?'Speaking — Adam unified voice fallback…':'Speaking — Adam Voice 2 + 4 identity…');
-   currentAudio.onended=()=>{setState('Ready');URL.revokeObjectURL(url);currentAudio=null};
+   currentAudio.onended=()=>{setState('Ready');URL.revokeObjectURL(url);currentAudio.removeAttribute('src');currentAudio.load();currentAudio=null};
    currentAudio.onerror=()=>{setState('Voice playback error');URL.revokeObjectURL(url);currentAudio=null};
-   await currentAudio.play();
+   adamVoiceAudio.src=url;
+   adamVoiceAudio.load();
+   await adamVoiceAudio.play();
  }catch(e){
    // Do not silently jump from Adam Lebanese Voice 2 + 4 to an unrelated
    // browser/device speaker. Preserve voice identity across every reply.
@@ -734,6 +751,7 @@ async function send(){
  if(!text&&!adamPendingFiles.length)return;
  // Prime browser speech while this function still runs from the user's tap/key gesture.
  primeAdamVoice();
+ primeAdamAudio();
  sendInFlight=true;
  const filesForThisSend=[...adamPendingFiles];
  const shownText=text||(filesForThisSend.length===1?'Analyze this attachment.':'Analyze these attachments.');
@@ -811,7 +829,7 @@ if(d.action&&d.action.type==='email_review')addEmailReview(d.action);if(d.action
  finally{sendInFlight=false;sendBtn.disabled=false}
 }
 sendBtn.onclick=send;input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(!e.repeat)send()}});
-voice.onclick=()=>{primeAdamVoice();voiceOn=!voiceOn;voice.textContent=voiceOn?'🎙 Assistant Voice: ON':'🔇 Assistant Voice: OFF'};
+voice.onclick=()=>{primeAdamVoice();primeAdamAudio();voiceOn=!voiceOn;voice.textContent=voiceOn?'🎙 Assistant Voice: ON':'🔇 Assistant Voice: OFF'};
 stopVoice.onclick=()=>{
  if(currentAudio){try{currentAudio.pause()}catch(e){} currentAudio=null}
  if('speechSynthesis' in window)window.speechSynthesis.cancel();
