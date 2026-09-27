@@ -449,7 +449,20 @@ const adamVoiceAudio=new Audio();
 adamVoiceAudio.preload='auto';
 let sendInFlight=false;
 let voiceSessionId=0;
-let voiceAutoSentSession=0;
+let activeVoiceSession=null;
+
+function closeVoiceSession(session){
+ if(!session)return;
+ session.closed=true;
+ clearTimeout(session.autoTimer);
+ clearTimeout(session.silenceTimer);
+ if(activeVoiceSession===session){
+   listening=false;
+   mic.classList.remove('micActive');
+   mic.textContent='🎤 Start Listening';
+ }
+ try{session.rec.abort()}catch(_){}
+}
 
 function primeAdamVoice(){
  if(adamVoicePrimed || !('speechSynthesis' in window))return;
@@ -749,6 +762,8 @@ async function send(){
  if(sendInFlight)return;
  const text=input.value.trim();
  if(!text&&!adamPendingFiles.length)return;
+ // Claim the microphone session before any asynchronous work or late callbacks.
+ closeVoiceSession(activeVoiceSession);
  input.value='';
  // Prime browser speech while this function still runs from the user's tap/key gesture.
  primeAdamVoice();
@@ -838,106 +853,98 @@ stopVoice.onclick=()=>{
 
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR){
- let voiceFinalBuffer='';
- let voiceAutoSendTimer=null;
- let voiceSilenceTimer=null;
+ function startVoiceSession(){
+   closeVoiceSession(activeVoiceSession);
+   // A separate recognizer binds every callback to the session that created it.
+   const recognition=new SR();
+   const session={id:++voiceSessionId,rec:recognition,closed:false,ended:false,
+     started:false,transcript:'',autoTimer:null,silenceTimer:null};
+   activeVoiceSession=session;
+   rec=recognition;
+   const current=()=>activeVoiceSession===session && !session.closed;
+   recognition.interimResults=true;
+   recognition.continuous=true;
+   recognition.lang=(language.value==='auto'?'en-US':language.value);
 
- rec=new SR();
- rec.interimResults=true;
- rec.continuous=true;
-
- rec.onstart=()=>{
-   listening=true;
-   voiceSessionId+=1;
-   voiceAutoSentSession=0;
-   voiceFinalBuffer='';
-   input.value='';
-   setState('Listening…');
-   mic.classList.add('micActive');
-   mic.textContent='🎤 Listening…';
- };
-
- rec.onresult=e=>{
-   clearTimeout(voiceSilenceTimer);
-   let finalText='',interim='';
-   for(let i=e.resultIndex;i<e.results.length;i++){
-     const t=e.results[i][0].transcript;
-     if(e.results[i].isFinal) finalText+=t;
-     else interim+=t;
-   }
-
-   if(finalText){
-     voiceFinalBuffer=(voiceFinalBuffer+' '+finalText).trim();
-     input.value=voiceFinalBuffer;
-     setState('Voice command captured…');
-   }else if(interim){
-     input.value=(voiceFinalBuffer+' '+interim).trim();
-     setState('Listening… '+interim);
-   }
-   // Do not end on a short natural pause. Three seconds of complete silence
-   // marks the end of the speaker's turn; Stop Listening remains available.
-   voiceSilenceTimer=setTimeout(()=>{if(listening)rec.stop()},3000);
- };
-
- rec.onerror=e=>{
-   listening=false;
-   mic.classList.remove('micActive');
-   mic.textContent='🎤 Start Listening';
-   if(e.error==='no-speech'){
-     setState('I did not hear a command. Try again.');
-   }else{
-     setState('Microphone error: '+e.error+'. Check browser microphone permission.');
-   }
- };
-
- rec.onend=()=>{
-   clearTimeout(voiceSilenceTimer);
-   listening=false;
-   mic.classList.remove('micActive');
-   mic.textContent='🎤 Start Listening';
-
-   const captured=(voiceFinalBuffer||input.value||'').trim();
-   const autoSend=document.getElementById('voiceAutoSend');
-   const shouldAutoSend=!autoSend || autoSend.checked;
-
-   if(captured){
-     if(shouldAutoSend && voiceAutoSentSession===voiceSessionId)return;
-     input.value=captured;
-     if(shouldAutoSend){
-       // iPhone/WebKit can fire more than one end/final callback for one spoken turn.
-       // Allow exactly one automatic AI request for each microphone session.
-       const thisSession=voiceSessionId;
-       voiceAutoSentSession=thisSession;
-       setState('Voice command received — Adam is processing…');
-       clearTimeout(voiceAutoSendTimer);
-       voiceAutoSendTimer=setTimeout(()=>{
-         if(voiceAutoSentSession===thisSession && !sendBtn.disabled && input.value.trim()){
-           send();
-         }
-       },350);
-     }else{
-       setState('Voice command captured — press Send');
+   recognition.onstart=()=>{
+     if(!current() || session.started || session.ended)return;
+     session.started=true;
+     listening=true;
+     input.value='';
+     setState('Listening…');
+     mic.classList.add('micActive');
+     mic.textContent='🎤 Listening…';
+   };
+   recognition.onresult=e=>{
+     if(!current() || session.ended)return;
+     clearTimeout(session.silenceTimer);
+     // Results are a cumulative snapshot; WebKit may repeat final indices.
+     let finalText='',interim='';
+     for(let i=0;i<e.results.length;i++){
+       const t=e.results[i][0].transcript;
+       if(e.results[i].isFinal)finalText+=t+' ';
+       else interim+=t+' ';
      }
-   }else{
-     setState('Ready');
+     session.transcript=(finalText+interim).trim();
+     input.value=session.transcript;
+     setState(interim?'Listening… '+interim:'Voice command captured…');
+     session.silenceTimer=setTimeout(()=>{
+       if(current() && !session.ended){try{recognition.stop()}catch(_){}}
+     },3000);
+   };
+   recognition.onerror=e=>{
+     if(!current() || session.ended)return;
+     closeVoiceSession(session);
+     setState(e.error==='no-speech'?'I did not hear a command. Try again.':
+       'Microphone error: '+e.error+'. Check browser microphone permission.');
+   };
+   recognition.onend=()=>{
+     if(!current() || session.ended)return;
+     session.ended=true;
+     clearTimeout(session.silenceTimer);
+     listening=false;
+     mic.classList.remove('micActive');
+     mic.textContent='🎤 Start Listening';
+     const captured=session.transcript.trim();
+     const autoSend=document.getElementById('voiceAutoSend');
+     if(!captured){setState('Ready');return}
+     if(autoSend && !autoSend.checked){
+       setState('Voice command captured — press Send');
+       return;
+     }
+     setState('Voice command received — Adam is processing…');
+     const submit=()=>{
+       if(!current())return;
+       // Leave edits for manual sending, and honor Auto Send being switched off.
+       if(input.value.trim()!==captured || (autoSend && !autoSend.checked)){
+         closeVoiceSession(session);
+         setState('Voice command captured — press Send');
+         return;
+       }
+       // Keep this session pending if a previous request is still finishing.
+       if(sendInFlight){session.autoTimer=setTimeout(submit,100);return}
+       send(); // send() synchronously claims this same session before yielding.
+     };
+     session.autoTimer=setTimeout(submit,350);
+   };
+   try{recognition.start()}catch(e){
+     closeVoiceSession(session);
+     setState('Microphone could not start: '+e.message);
    }
- };
-
+ }
  mic.onclick=()=>{
    try{
-     if(listening){
+     if(activeVoiceSession && !activeVoiceSession.closed && !activeVoiceSession.ended){
        rec.stop();
        return;
      }
-     rec.lang=(language.value==='auto'?'en-US':language.value);
-     rec.start();
-   }catch(e){
-     setState('Microphone could not start: '+e.message);
-   }
+     startVoiceSession();
+   }catch(e){setState('Microphone could not start: '+e.message)}
  };
-
  stopMic.onclick=()=>{
-   if(listening) rec.stop();
+   if(activeVoiceSession && !activeVoiceSession.closed && !activeVoiceSession.ended){
+     try{rec.stop()}catch(_){}
+   }
  };
 }else{
  mic.onclick=()=>setState('This browser does not provide speech recognition. Use Chrome/Edge on Windows, or type your message.');
