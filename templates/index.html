@@ -749,13 +749,13 @@ async function send(){
  if(sendInFlight)return;
  const text=input.value.trim();
  if(!text&&!adamPendingFiles.length)return;
+ input.value='';
  // Prime browser speech while this function still runs from the user's tap/key gesture.
  primeAdamVoice();
  primeAdamAudio();
  sendInFlight=true;
  const filesForThisSend=[...adamPendingFiles];
  const shownText=text||(filesForThisSend.length===1?'Analyze this attachment.':'Analyze these attachments.');
- input.value='';
  add('user',shownText+(filesForThisSend.length?'\n📎 '+filesForThisSend.map(f=>f.name).join(', '):''));
  setState('Processing…');sendBtn.disabled=true;
  try{
@@ -851,6 +851,7 @@ if(SR){
    voiceSessionId+=1;
    voiceAutoSentSession=0;
    voiceFinalBuffer='';
+   input.value='';
    setState('Listening…');
    mic.classList.add('micActive');
    mic.textContent='🎤 Listening…';
@@ -900,12 +901,12 @@ if(SR){
    const shouldAutoSend=!autoSend || autoSend.checked;
 
    if(captured){
+     if(shouldAutoSend && voiceAutoSentSession===voiceSessionId)return;
      input.value=captured;
      if(shouldAutoSend){
        // iPhone/WebKit can fire more than one end/final callback for one spoken turn.
        // Allow exactly one automatic AI request for each microphone session.
        const thisSession=voiceSessionId;
-       if(voiceAutoSentSession===thisSession)return;
        voiceAutoSentSession=thisSession;
        setState('Voice command received — Adam is processing…');
        clearTimeout(voiceAutoSendTimer);
