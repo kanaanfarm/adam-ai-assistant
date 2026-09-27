@@ -443,6 +443,18 @@ async function refreshStockDashboard(speakAlert=false){
 
 
 let currentAudio=null;
+let adamVoicePrimed=false;
+let sendInFlight=false;
+
+function primeAdamVoice(){
+ if(adamVoicePrimed || !('speechSynthesis' in window))return;
+ try{
+   const u=new SpeechSynthesisUtterance(' ');
+   u.volume=0;
+   speechSynthesis.speak(u);
+   adamVoicePrimed=true;
+ }catch(_){ }
+}
 
 function speakWithDevice(text,reason){
  if(!('speechSynthesis' in window)){setState('Voice not available');return}
@@ -713,8 +725,12 @@ function addWorkflowReview(a){
  chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
 }
 async function send(){
+ if(sendInFlight)return;
  const text=input.value.trim();
  if(!text&&!adamPendingFiles.length)return;
+ // Prime browser speech while this function still runs from the user's tap/key gesture.
+ primeAdamVoice();
+ sendInFlight=true;
  const filesForThisSend=[...adamPendingFiles];
  const shownText=text||(filesForThisSend.length===1?'Analyze this attachment.':'Analyze these attachments.');
  input.value='';
@@ -788,10 +804,10 @@ add('assistant',d.reply);adamPendingFiles=[];adamRenderAttachments();if(d.action
 
 if(d.action&&d.action.type==='email_review')addEmailReview(d.action);if(d.action&&d.action.type==='contact_saved')addContactSavedCard(d.action);if(d.action&&d.action.type==='contact_updated')addContactUpdatedCard(d.action);history.push({role:'user',content:text},{role:'assistant',content:d.reply});speak(d.reply)}
  catch(e){add('assistant','Error: '+e.message);setState('Error')}
- finally{sendBtn.disabled=false}
+ finally{sendInFlight=false;sendBtn.disabled=false}
 }
-sendBtn.onclick=send;input.addEventListener('keydown',e=>{if(e.key==='Enter')send()});
-voice.onclick=()=>{voiceOn=!voiceOn;voice.textContent=voiceOn?'🎙 Assistant Voice: ON':'🔇 Assistant Voice: OFF'};
+sendBtn.onclick=send;input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(!e.repeat)send()}});
+voice.onclick=()=>{primeAdamVoice();voiceOn=!voiceOn;voice.textContent=voiceOn?'🎙 Assistant Voice: ON':'🔇 Assistant Voice: OFF'};
 stopVoice.onclick=()=>{
  if(currentAudio){try{currentAudio.pause()}catch(e){} currentAudio=null}
  if('speechSynthesis' in window)window.speechSynthesis.cancel();
