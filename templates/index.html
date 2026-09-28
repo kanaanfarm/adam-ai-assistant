@@ -743,6 +743,17 @@ async function adamAnalyzePendingAttachments(userInstruction,filesToAnalyze){
 }
 
 
+function addTelnyxCallReview(a){
+ const box=document.createElement('div');box.className='emailReview';
+ const h=document.createElement('strong');h.textContent='ADAM Phone Call — Owner Review';box.appendChild(h);
+ const n=document.createElement('div');n.className='small';n.style.margin='8px 0';n.textContent=a.phone||'';box.appendChild(n);
+ const w=document.createElement('label');w.className='emailApprove';const c=document.createElement('input');c.type='checkbox';const t=document.createElement('span');t.textContent='I approve ADAM dialing this number now';w.append(c,t);box.appendChild(w);
+ const b=document.createElement('button');b.className='emailSend';b.textContent='Call Now';b.disabled=true;c.onchange=()=>b.disabled=!c.checked;
+ const status=document.createElement('div');status.className='emailStatus';box.append(b,status);
+ b.onclick=async()=>{if(!c.checked)return;b.disabled=true;status.textContent='Starting call…';try{const r=await fetch('/api/telnyx/call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved:true,phone:a.phone})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Call failed');status.className='emailStatus ok';status.textContent='Call started successfully.';c.disabled=true;b.textContent='Call Started'}catch(e){status.className='emailStatus warn';status.textContent='Call not started: '+e.message;b.disabled=!c.checked}};
+ chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
+}
+
 function addWorkflowReview(a){
  const box=document.createElement('div');box.className='emailReview';const h=document.createElement('strong');h.textContent='Adam Workflow — Owner Review';box.appendChild(h);
  const st=document.createElement('div');st.className='small';st.style.margin='8px 0';st.textContent=(a.steps||[]).join(' → ');box.appendChild(st);
@@ -781,7 +792,7 @@ async function send(){
     try{ d=JSON.parse(raw); }
     catch(_){ throw new Error('Server returned HTTP '+r.status+' instead of JSON. '+raw.slice(0,160)); }if(!d.ok)throw new Error(d.error||'Request failed');
 
-add('assistant',d.reply);adamPendingFiles=[];adamRenderAttachments();if(d.action&&d.action.type==='workflow_review')addWorkflowReview(d.action);if(d.action&&d.action.type==='whatsapp_review')addWhatsAppReview(d.action);
+add('assistant',d.reply);adamPendingFiles=[];adamRenderAttachments();if(d.action&&d.action.type==='telnyx_call_review')addTelnyxCallReview(d.action);if(d.action&&d.action.type==='workflow_review')addWorkflowReview(d.action);if(d.action&&d.action.type==='whatsapp_review')addWhatsAppReview(d.action);
   if(d.action&&d.action.type==='calendar_review'){
     const a=d.action;
     const box=document.createElement('div');box.className='emailReview';
