@@ -6823,6 +6823,16 @@ def real_daily_assistant_api_v720():
 def real_daily_assistant_self_test_api_v720():
     result=real_daily_assistant_self_test(); result["version"]=VERSION; return jsonify(result)
 
+# Telnyx Voice API webhook. Telnyx requires a valid public webhook URL on the
+# Voice API Application used as connection_id. Keep this endpoint fast and
+# acknowledge events without exposing credentials or personal data.
+@app.route("/webhooks/telnyx", methods=["POST"])
+def telnyx_webhook_api():
+    payload = request.get_json(silent=True) or {}
+    event = payload.get("data", {}).get("event_type") if isinstance(payload, dict) else None
+    app.logger.info("Telnyx webhook event received: %s", event or "unknown")
+    return jsonify({"ok": True}), 200
+
 # Telnyx owner-approved outbound call execution.
 @app.route("/api/telnyx/call", methods=["POST"])
 def telnyx_call_api():

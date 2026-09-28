@@ -1,7 +1,8 @@
 """Telnyx outbound calling foundation for ADAM.
 
 Secrets/configuration are read from Render environment variables:
-TELNYX_API_KEY, TELNYX_OUTBOUND_PROFILE_ID, TELNYX_FROM_NUMBER.
+TELNYX_API_KEY, TELNYX_CONNECTION_ID, TELNYX_FROM_NUMBER.
+TELNYX_OUTBOUND_PROFILE_ID is accepted only as a temporary legacy fallback.
 
 This module deliberately requires explicit approval from the caller.  It does
 not expose secrets and can be wired into ADAM's approval/UI layer separately.
@@ -56,11 +57,14 @@ def _api_key_diagnostics(value: str) -> Dict[str, Any]:
 
 def readiness() -> Dict[str, Any]:
     """Return configuration status and safe API-key diagnostics; never return secrets."""
-    names = ("TELNYX_API_KEY", "TELNYX_OUTBOUND_PROFILE_ID", "TELNYX_FROM_NUMBER")
+    names = ("TELNYX_API_KEY", "TELNYX_CONNECTION_ID", "TELNYX_FROM_NUMBER")
     configured = {name: bool(str(os.getenv(name, "")).strip()) for name in names}
+    legacy_connection = bool(str(os.getenv("TELNYX_OUTBOUND_PROFILE_ID", "")).strip())
+    connection_ready = configured["TELNYX_CONNECTION_ID"] or legacy_connection
     return {
-        "configured": all(configured.values()),
+        "configured": configured["TELNYX_API_KEY"] and connection_ready and configured["TELNYX_FROM_NUMBER"],
         "environment": configured,
+        "legacy_outbound_profile_fallback_present": legacy_connection,
         "telnyx_api_key": _api_key_diagnostics(os.getenv("TELNYX_API_KEY", "")),
     }
 
@@ -84,7 +88,9 @@ def create_outbound_call(to_number: str, *, approved: bool = False, timeout: int
         raise TelnyxCallError("TELNYX_API_KEY contains whitespace; paste the API key again without spaces or line breaks")
     if not key_diag["starts_with_KEY"]:
         raise TelnyxCallError("TELNYX_API_KEY has an unexpected format (expected it to start with KEY)")
-    connection_id = _env("TELNYX_OUTBOUND_PROFILE_ID")
+    connection_id = str(os.getenv("TELNYX_CONNECTION_ID", "")).strip() or str(os.getenv("TELNYX_OUTBOUND_PROFILE_ID", "")).strip()
+    if not connection_id:
+        raise TelnyxCallError("Missing required environment variable: TELNYX_CONNECTION_ID")
     from_number = normalize_e164(_env("TELNYX_FROM_NUMBER"))
     to_number = normalize_e164(to_number)
 
