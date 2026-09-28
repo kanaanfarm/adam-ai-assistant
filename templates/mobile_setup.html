@@ -1,1 +1,27 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#111827"><link rel="manifest" href="/static/manifest.json"><title>Install on Phone</title><style>body{font-family:Arial;background:#f3f4f6;color:#111827;margin:0}.wrap{max-width:760px;margin:30px auto;padding:16px}.card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:22px;margin-bottom:15px}h1,h2{margin-top:0}.url{padding:12px;background:#eef2ff;border-radius:8px;word-break:break-all;font-weight:700}.btn{display:inline-block;background:#111827;color:white;padding:11px 15px;border-radius:8px;text-decoration:none;font-weight:700}.note{color:#667085;line-height:1.5}ol{line-height:1.8}</style></head><body><div class="wrap"><div class="card"><h1>Install Adam AI on Phone {{ version }}</h1><p class="note">Keep the desktop assistant running. Your phone and desktop must use the same Wi-Fi.</p><div class="url">{{ local_url }}</div><p><a class="btn" href="/">Open Assistant</a></p></div><div class="card"><h2>Android — local Wi-Fi</h2><ol><li>Build/install the included Android wrapper.</li><li>Enter the address displayed above and tap Connect.</li><li>Telephone links open the Android dialer.</li></ol></div><div class="card"><h2>Android or iPhone — web installation</h2><ol><li>Deploy the assistant on a public HTTPS address.</li><li>Android Chrome: select <b>Install app</b>.</li><li>iPhone Safari: Share → <b>Add to Home Screen</b>.</li></ol><p class="note">HTTPS is required for reliable microphone and full PWA behavior. The local Wi-Fi address is intended for the Android wrapper and browser testing.</p></div><div class="card"><h2>Updates</h2><p class="note">Run the newer desktop update installer. Local settings and contacts are preserved. The phone interface updates when it reconnects.</p></div></div></body></html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><link rel="manifest" href="/static/manifest.json">
+<title>Adam on Phone</title><style>
+*{box-sizing:border-box}body{font:16px system-ui,sans-serif;background:#f3f4f6;color:#111827;margin:0}
+.wrap{max-width:760px;margin:auto;padding:16px}.card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin-bottom:15px}
+h1,h2{margin-top:0}.url{padding:12px;background:#eef2ff;border-radius:8px;overflow-wrap:anywhere;font-weight:700}
+.btn{display:inline-block;background:#111827;color:white;padding:11px 15px;border-radius:8px;text-decoration:none;font-weight:700}
+.note{color:#526078;line-height:1.5}ol{line-height:1.7;padding-left:22px}
+</style></head><body><div class="wrap">
+<div class="card"><h1>Adam AI Assistant on your phone</h1>
+{% if request.host.endswith('.onrender.com') %}
+<p class="note">Your online Adam runs on Render. Your laptop can be off.</p>
+<div class="url">https://{{ request.host }}/</div>
+{% else %}
+<p class="note">For this local copy, keep the computer running and use the same Wi-Fi.</p>
+<div class="url">{{ local_url }}</div>
+{% endif %}
+<p><a class="btn" href="/">Open Adam</a></p></div>
+<div class="card"><h2>iPhone</h2><ol><li>Open Adam in Safari and sign in.</li>
+<li>Tap Share, then Add to Home Screen.</li><li>Turn on Open as Web App if offered, then tap Add.</li></ol></div>
+<div class="card"><h2>Android</h2><ol><li>Open Adam in Chrome and sign in.</li>
+<li>Open the browser menu, then choose Install app or Install and create shortcut.</li></ol></div>
+{% if request.host.endswith('.onrender.com') %}
+<div class="card"><p class="note">Render Free may take time to wake after inactivity. Settings saved in the app can disappear after a restart or redeploy.</p></div>
+{% endif %}
+</div></body></html>

@@ -17,3 +17,4 @@ selenium>=4.25.0
 
 # v8.2.0.2 local HTTPS for secure guest microphone access
 cryptography>=43.0.0
+psycopg[binary]>=3.2.0,<4

@@ -9,6 +9,7 @@ input{width:100%;box-sizing:border-box;padding:10px;font:inherit}button,a{paddin
 </style></head><body><div class="wrap">
 <div class="card"><h1>Microsoft Outlook Connection</h1><a href="/">← Back</a>
 <p>Status: <b id="status" class="{{ 'ok' if status.status=='connected' else 'warn' }}">{{ status.status }}</b></p>
+{% if status.error %}<p class="warn">{{ status.error }}</p>{% endif %}
 </div>
 <div class="card"><h2>Step 1 — Application (client) ID</h2>
 <p class="small">This is required by Microsoft for a standalone application. You may also set MICROSOFT_CLIENT_ID in .env.</p>

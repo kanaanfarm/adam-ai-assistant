@@ -37,6 +37,7 @@ from adam_core.service_boundaries import build_service_boundary_manifest, servic
 from adam_core.connector_boundaries import build_connector_boundary_manifest, connector_boundaries_are_privacy_safe
 from adam_core.connectors import execute_email as core_execute_email, execute_calendar as core_execute_calendar, execute_whatsapp as core_execute_whatsapp, self_test as connector_adapter_self_test, ConnectorValidationError
 from adam_core.microsoft_identity import MicrosoftIdentityState, load_client_config as core_ms_load_config, save_client_config as core_ms_save_config, load_serialized_cache as core_ms_load_serialized_cache, persist_serialized_cache as core_ms_persist_serialized_cache
+from adam_core import microsoft_durable_cache as ms_durable_cache
 from adam_core.identity_boundary import build_identity_boundary_manifest, identity_boundary_is_privacy_safe, identity_boundary_self_test
 from adam_core.whatsapp_boundary import load_config as core_wa_load_config, save_config as core_wa_save_config, public_status as core_wa_public_status, normalize_number as core_wa_normalize_number, verify_challenge as core_wa_verify_challenge, verify_signature as core_wa_verify_signature, project_incoming_messages as core_wa_project_incoming_messages, append_jsonl as core_wa_append_jsonl, public_boundary_state as core_wa_public_boundary_state
 from adam_core.whatsapp_boundary_evidence import build_whatsapp_boundary_manifest, whatsapp_boundary_is_privacy_safe, whatsapp_boundary_self_test
@@ -180,6 +181,7 @@ from adam_core.unified_adam_operator import build_unified_operator_plan, self_te
 from adam_core.stock_notification_policy import evaluate_notification as evaluate_stock_notification, self_test as stock_notification_self_test
 from adam_core.real_services_connection import build_status as build_real_services_status, self_test as real_services_connection_self_test
 from adam_core.calling_invitations import build_status as build_calling_invitations_status, prepare_invitation as prepare_calling_invitation, prepare_call as prepare_call_launch, self_test as calling_invitations_self_test
+from adam_core.telnyx_outbound import readiness as telnyx_call_readiness, create_outbound_call as telnyx_create_outbound_call, TelnyxCallError
 from adam_core.cross_app_personal_operator import build_status as build_cross_app_personal_operator_status, prepare_workflow as prepare_cross_app_personal_workflow, execute_workflow as execute_cross_app_personal_workflow, self_test as cross_app_personal_operator_self_test
 from adam_core.production_reliability import build_status as build_production_reliability_status, self_test as production_reliability_self_test
 from adam_core.security_privacy_certification import build_status as build_security_privacy_certification_status, self_test as security_privacy_certification_self_test
@@ -1962,7 +1964,7 @@ def adam_acquisition_identity_boundary_v190():
     payload = build_identity_boundary_manifest(
         version=VERSION,
         client_configured=bool(ms_load_config().get("client_id")),
-        token_cache_present=MS_TOKEN_CACHE_FILE.exists() and MS_TOKEN_CACHE_FILE.stat().st_size > 0,
+        token_cache_present=ms_cache_present(),
     )
     return jsonify({"ok": True, "version": VERSION, "privacy_safe": identity_boundary_is_privacy_safe(payload), "identity_boundary": payload})
 
@@ -1976,7 +1978,7 @@ def adam_acquisition_identity_boundary_download_v190():
     payload = build_identity_boundary_manifest(
         version=VERSION,
         client_configured=bool(ms_load_config().get("client_id")),
-        token_cache_present=MS_TOKEN_CACHE_FILE.exists() and MS_TOKEN_CACHE_FILE.stat().st_size > 0,
+        token_cache_present=ms_cache_present(),
     )
     body = json.dumps({"ok": True, "version": VERSION, "privacy_safe": identity_boundary_is_privacy_safe(payload), "identity_boundary": payload}, indent=2)
     response = app.response_class(body, mimetype="application/json")
@@ -2294,6 +2296,11 @@ def analyze_main_intent_v06917(text, history=None, contacts=None):
 
     if detect_calendar_meeting_intent_v06929(raw):
         return {"intent": "calendar_meeting", "confidence": 0.99, "reason": "calendar/meeting request"}
+
+    # v0.8.0.2 — explicit phone-call request. A phone number alone is still data.
+    call_action = bool(re.search(r"\b(?:call|dial|phone)\b", low)) or any(x in raw for x in ("اتصل", "إتصل", "دق", "رن على"))
+    if call_action:
+        return {"intent": "phone_call", "confidence": 0.99, "reason": "explicit outbound phone-call request"}
 
 
     # v0.8.0.1 — preparing a letter/document has priority over its delivery method.
@@ -2691,7 +2698,7 @@ def assistant_chat_api():
     if not text:
         return jsonify({"ok": False, "error": "Enter a message or translation request."}), 400
 
-    language_code = str(body.get("response_language") or "auto").strip()
+    language_code = str(body.get("response_language") or "ar-LB").strip()
     language_name = LANGUAGE_NAMES.get(language_code, language_code or "the user's language")
     history = body.get("messages") or []
     contacts_for_intent = load_contacts()
@@ -2796,6 +2803,29 @@ def assistant_chat_api():
         "text": text[:200],
     })
 
+
+    # v0.8.0.2 — Telnyx outbound call preview. The actual call always requires
+    # a separate explicit owner approval click in the UI.
+    if selected_intent == "phone_call":
+        raw_request = str(body.get("text") or "").strip()
+        contact = find_contact_in_instruction(raw_request, contacts_for_intent)
+        phone_match = re.search(r"(?<!\w)(?:\+|00)?\d[\d\s().-]{6,}\d", raw_request)
+        phone = str((contact or {}).get("phone") or "").strip()
+        if not phone and phone_match:
+            phone = re.sub(r"[\s().-]+", "", phone_match.group(0))
+            if phone.startswith("00"): phone = "+" + phone[2:]
+        if not phone:
+            return jsonify({"ok": True, "reply": "I understood the call request, but I could not find a saved phone number. Please save the contact number or include it with the call request.", "intent": "phone_call"})
+        name = str((contact or {}).get("name") or "").strip()
+        ready = telnyx_call_readiness()
+        if not ready.get("configured"):
+            return jsonify({"ok": True, "reply": "The call is prepared, but Telnyx is not fully configured on the server yet.", "intent": "phone_call", "action": {"type": "phone_call_unavailable", "contact_name": name, "phone": phone}})
+        return jsonify({
+            "ok": True,
+            "reply": "Call prepared" + (" for " + name if name else "") + ". Review the number below. Nothing will be dialed until you approve.",
+            "intent": "phone_call",
+            "action": {"type": "phone_call_review", "contact_name": name, "phone": phone, "owner_approval_required": True}
+        })
 
     # v0.8.0.1 — prepare the requested LETTER first. Email is only the delivery channel.
     if selected_intent == "document_letter":
@@ -4422,7 +4452,7 @@ def ms_token_cache():
     if msal is None:
         return None
     cache = msal.SerializableTokenCache()
-    serialized = core_ms_load_serialized_cache(MS_TOKEN_CACHE_FILE)
+    serialized = ms_durable_cache.load() if ms_durable_cache.enabled() else core_ms_load_serialized_cache(MS_TOKEN_CACHE_FILE)
     if serialized:
         try:
             cache.deserialize(serialized)
@@ -4432,7 +4462,15 @@ def ms_token_cache():
 
 def ms_persist_cache(cache):
     if cache is not None and cache.has_state_changed:
-        core_ms_persist_serialized_cache(MS_TOKEN_CACHE_FILE, cache.serialize())
+        if ms_durable_cache.enabled():
+            ms_durable_cache.save(cache.serialize())
+        else:
+            core_ms_persist_serialized_cache(MS_TOKEN_CACHE_FILE, cache.serialize())
+
+def ms_cache_present():
+    if ms_durable_cache.enabled():
+        return bool(ms_durable_cache.load())
+    return MS_TOKEN_CACHE_FILE.exists() and MS_TOKEN_CACHE_FILE.stat().st_size > 0
 
 def ms_app():
     if msal is None:
@@ -4489,8 +4527,11 @@ def ms_start_device_flow():
     return safe
 
 def ms_status():
-    if ms_access_token():
-        return {"status": "connected"}
+    try:
+        if ms_access_token():
+            return {"status": "connected"}
+    except Exception:
+        return {"status": "error", "error": "Microsoft storage unavailable. Check the Neon connection in Render Environment."}
     return MS_IDENTITY_STATE.status()
 
 def microsoft_sender_label():
@@ -4736,6 +4777,8 @@ def microsoft_status_v06923():
 @app.route("/api/microsoft/disconnect", methods=["POST"], endpoint="microsoft_disconnect_v06923")
 def microsoft_disconnect_v06923():
     try:
+        if ms_durable_cache.enabled():
+            ms_durable_cache.clear()
         if MS_TOKEN_CACHE_FILE.exists():
             MS_TOKEN_CACHE_FILE.unlink()
         MS_IDENTITY_STATE.reset()
@@ -6796,6 +6839,25 @@ def real_daily_assistant_api_v720():
 @app.route("/api/personal-assistant/real-daily-assistant/self-test", methods=["GET"])
 def real_daily_assistant_self_test_api_v720():
     result=real_daily_assistant_self_test(); result["version"]=VERSION; return jsonify(result)
+
+# v0.8.0.2 — Telnyx live outbound call execution.
+@app.route("/api/personal-assistant/phone-call/status", methods=["GET"])
+def telnyx_phone_call_status_v0802():
+    return jsonify({"ok": True, "version": VERSION, **telnyx_call_readiness()})
+
+@app.route("/api/personal-assistant/phone-call/execute", methods=["POST"])
+def telnyx_phone_call_execute_v0802():
+    body = request.get_json(silent=True) or {}
+    if body.get("approved") is not True:
+        return jsonify({"ok": False, "error": "Owner approval is required before dialing."}), 400
+    try:
+        result = telnyx_create_outbound_call(str(body.get("phone") or ""), approved=True)
+        audit("TELNYX_OUTBOUND_CALL_V0802", {"to": result.get("to"), "call_leg_id": result.get("call_leg_id")})
+        return jsonify({"version": VERSION, **result})
+    except TelnyxCallError as exc:
+        audit("TELNYX_OUTBOUND_CALL_ERROR_V0802", {"error": str(exc)})
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 # v7.3.0 — Real Meeting Attendance companion
 @app.route("/calling-invitations", methods=["GET"])

@@ -7,7 +7,6 @@
 <div class="module"><h3>Outlook Email</h3><p>Review sender, recipient, subject and email before sending.</p><a class="btn" href="/email">Open Email Approval</a></div>
 <div class="module"><h3>Sales Assistant</h3><p>Review, edit and approve the customer reply.</p><a class="btn" href="/sales">Open Sales Approval</a></div>
 <div class="module"><h3>Documents</h3><p>Review generated content before copying or downloading Word.</p><a class="btn" href="/documents">Open Document Review</a></div>
-<div class="module"><h3>Stock — Alpaca Paper</h3><p>Approve or reject each proposed PAPER order.</p><a class="btn" href="/stock">Open Stock Approval Queue</a></div>
 <div class="module"><h3>Calendar</h3><p>Review meeting details before creating an Outlook event.</p><a class="btn" href="/calendar">Open Calendar Approval</a></div>
 </div></div>
 <div class="card"><h2>Owner Permission Rules</h2><div class="tableWrap"><table><thead><tr><th>Action</th><th>Control</th></tr></thead><tbody>{% for action, control in permissions.items() %}<tr><td>{{ action.replace('_',' ')|title }}</td><td class="{{ 'blocked' if control == 'BLOCKED' else 'approval' }}">{{ control }}</td></tr>{% endfor %}</tbody></table></div></div>
