@@ -181,7 +181,6 @@ from adam_core.unified_adam_operator import build_unified_operator_plan, self_te
 from adam_core.stock_notification_policy import evaluate_notification as evaluate_stock_notification, self_test as stock_notification_self_test
 from adam_core.real_services_connection import build_status as build_real_services_status, self_test as real_services_connection_self_test
 from adam_core.calling_invitations import build_status as build_calling_invitations_status, prepare_invitation as prepare_calling_invitation, prepare_call as prepare_call_launch, self_test as calling_invitations_self_test
-from adam_core.telnyx_outbound import readiness as telnyx_call_readiness, create_outbound_call as telnyx_create_outbound_call, TelnyxCallError
 from adam_core.cross_app_personal_operator import build_status as build_cross_app_personal_operator_status, prepare_workflow as prepare_cross_app_personal_workflow, execute_workflow as execute_cross_app_personal_workflow, self_test as cross_app_personal_operator_self_test
 from adam_core.production_reliability import build_status as build_production_reliability_status, self_test as production_reliability_self_test
 from adam_core.security_privacy_certification import build_status as build_security_privacy_certification_status, self_test as security_privacy_certification_self_test
@@ -2297,11 +2296,6 @@ def analyze_main_intent_v06917(text, history=None, contacts=None):
     if detect_calendar_meeting_intent_v06929(raw):
         return {"intent": "calendar_meeting", "confidence": 0.99, "reason": "calendar/meeting request"}
 
-    # v0.8.0.2 — explicit phone-call request. A phone number alone is still data.
-    call_action = bool(re.search(r"\b(?:call|dial|phone)\b", low)) or any(x in raw for x in ("اتصل", "إتصل", "دق", "رن على"))
-    if call_action:
-        return {"intent": "phone_call", "confidence": 0.99, "reason": "explicit outbound phone-call request"}
-
 
     # v0.8.0.1 — preparing a letter/document has priority over its delivery method.
     if detect_letter_document_intent_v06926(raw):
@@ -2803,29 +2797,6 @@ def assistant_chat_api():
         "text": text[:200],
     })
 
-
-    # v0.8.0.2 — Telnyx outbound call preview. The actual call always requires
-    # a separate explicit owner approval click in the UI.
-    if selected_intent == "phone_call":
-        raw_request = str(body.get("text") or "").strip()
-        contact = find_contact_in_instruction(raw_request, contacts_for_intent)
-        phone_match = re.search(r"(?<!\w)(?:\+|00)?\d[\d\s().-]{6,}\d", raw_request)
-        phone = str((contact or {}).get("phone") or "").strip()
-        if not phone and phone_match:
-            phone = re.sub(r"[\s().-]+", "", phone_match.group(0))
-            if phone.startswith("00"): phone = "+" + phone[2:]
-        if not phone:
-            return jsonify({"ok": True, "reply": "I understood the call request, but I could not find a saved phone number. Please save the contact number or include it with the call request.", "intent": "phone_call"})
-        name = str((contact or {}).get("name") or "").strip()
-        ready = telnyx_call_readiness()
-        if not ready.get("configured"):
-            return jsonify({"ok": True, "reply": "The call is prepared, but Telnyx is not fully configured on the server yet.", "intent": "phone_call", "action": {"type": "phone_call_unavailable", "contact_name": name, "phone": phone}})
-        return jsonify({
-            "ok": True,
-            "reply": "Call prepared" + (" for " + name if name else "") + ". Review the number below. Nothing will be dialed until you approve.",
-            "intent": "phone_call",
-            "action": {"type": "phone_call_review", "contact_name": name, "phone": phone, "owner_approval_required": True}
-        })
 
     # v0.8.0.1 — prepare the requested LETTER first. Email is only the delivery channel.
     if selected_intent == "document_letter":
@@ -6839,25 +6810,6 @@ def real_daily_assistant_api_v720():
 @app.route("/api/personal-assistant/real-daily-assistant/self-test", methods=["GET"])
 def real_daily_assistant_self_test_api_v720():
     result=real_daily_assistant_self_test(); result["version"]=VERSION; return jsonify(result)
-
-# v0.8.0.2 — Telnyx live outbound call execution.
-@app.route("/api/personal-assistant/phone-call/status", methods=["GET"])
-def telnyx_phone_call_status_v0802():
-    return jsonify({"ok": True, "version": VERSION, **telnyx_call_readiness()})
-
-@app.route("/api/personal-assistant/phone-call/execute", methods=["POST"])
-def telnyx_phone_call_execute_v0802():
-    body = request.get_json(silent=True) or {}
-    if body.get("approved") is not True:
-        return jsonify({"ok": False, "error": "Owner approval is required before dialing."}), 400
-    try:
-        result = telnyx_create_outbound_call(str(body.get("phone") or ""), approved=True)
-        audit("TELNYX_OUTBOUND_CALL_V0802", {"to": result.get("to"), "call_leg_id": result.get("call_leg_id")})
-        return jsonify({"version": VERSION, **result})
-    except TelnyxCallError as exc:
-        audit("TELNYX_OUTBOUND_CALL_ERROR_V0802", {"error": str(exc)})
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
 
 # v7.3.0 — Real Meeting Attendance companion
 @app.route("/calling-invitations", methods=["GET"])

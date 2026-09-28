@@ -743,17 +743,6 @@ async function adamAnalyzePendingAttachments(userInstruction,filesToAnalyze){
 }
 
 
-function addPhoneCallReview(a){
- const box=document.createElement('div');box.className='emailReview';
- const h=document.createElement('strong');h.textContent='ADAM Phone Call — Owner Review';box.appendChild(h);
- const info=document.createElement('div');info.className='small';info.style.margin='8px 0';info.textContent=(a.contact_name? a.contact_name+' — ':'')+(a.phone||'');box.appendChild(info);
- const wrap=document.createElement('label');wrap.className='emailApprove';const c=document.createElement('input');c.type='checkbox';const t=document.createElement('span');t.textContent='I approve ADAM dialing this number now';wrap.append(c,t);box.appendChild(wrap);
- const b=document.createElement('button');b.className='emailSend';b.textContent='Call Now';b.disabled=true;c.onchange=()=>b.disabled=!c.checked;box.appendChild(b);
- const status=document.createElement('div');status.className='emailStatus';box.appendChild(status);
- b.onclick=async()=>{if(!c.checked)return;b.disabled=true;status.textContent='Starting call…';try{const r=await fetch('/api/personal-assistant/phone-call/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved:true,phone:a.phone})});const d=await r.json();if(!d.ok)throw new Error(d.error||'Call failed');status.className='emailStatus ok';status.textContent='Call started successfully.';c.disabled=true;b.textContent='Call Started';add('assistant','The approved phone call has been started.');}catch(e){status.className='emailStatus warn';status.textContent='Call not started: '+e.message;b.disabled=!c.checked;}};
- chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
-}
-
 function addWorkflowReview(a){
  const box=document.createElement('div');box.className='emailReview';const h=document.createElement('strong');h.textContent='Adam Workflow — Owner Review';box.appendChild(h);
  const st=document.createElement('div');st.className='small';st.style.margin='8px 0';st.textContent=(a.steps||[]).join(' → ');box.appendChild(st);
@@ -850,7 +839,7 @@ add('assistant',d.reply);adamPendingFiles=[];adamRenderAttachments();if(d.action
     box.append(button,status);chat.appendChild(box);chat.scrollTop=chat.scrollHeight;
   }
 
-if(d.action&&d.action.type==='phone_call_review')addPhoneCallReview(d.action);if(d.action&&d.action.type==='email_review')addEmailReview(d.action);if(d.action&&d.action.type==='contact_saved')addContactSavedCard(d.action);if(d.action&&d.action.type==='contact_updated')addContactUpdatedCard(d.action);history.push({role:'user',content:text},{role:'assistant',content:d.reply});speak(d.reply)}
+if(d.action&&d.action.type==='email_review')addEmailReview(d.action);if(d.action&&d.action.type==='contact_saved')addContactSavedCard(d.action);if(d.action&&d.action.type==='contact_updated')addContactUpdatedCard(d.action);history.push({role:'user',content:text},{role:'assistant',content:d.reply});speak(d.reply)}
  catch(e){add('assistant','Error: '+e.message);setState('Error')}
  finally{sendInFlight=false;sendBtn.disabled=false}
 }

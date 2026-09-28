@@ -40,11 +40,29 @@ def normalize_e164(number: str) -> str:
     return cleaned
 
 
+def _api_key_diagnostics(value: str) -> Dict[str, Any]:
+    """Return safe Telnyx API-key diagnostics without exposing the secret."""
+    raw = str(value or "")
+    stripped = raw.strip()
+    return {
+        "present": bool(stripped),
+        "starts_with_KEY": stripped.startswith("KEY"),
+        "length": len(stripped),
+        "has_whitespace": any(ch.isspace() for ch in stripped),
+        "has_quotes": stripped.startswith(("\"", "'")) or stripped.endswith(("\"", "'")),
+        "has_bearer_prefix": stripped.lower().startswith("bearer "),
+    }
+
+
 def readiness() -> Dict[str, Any]:
-    """Return configuration status without ever returning secret values."""
+    """Return configuration status and safe API-key diagnostics; never return secrets."""
     names = ("TELNYX_API_KEY", "TELNYX_OUTBOUND_PROFILE_ID", "TELNYX_FROM_NUMBER")
     configured = {name: bool(str(os.getenv(name, "")).strip()) for name in names}
-    return {"configured": all(configured.values()), "environment": configured}
+    return {
+        "configured": all(configured.values()),
+        "environment": configured,
+        "telnyx_api_key": _api_key_diagnostics(os.getenv("TELNYX_API_KEY", "")),
+    }
 
 
 def create_outbound_call(to_number: str, *, approved: bool = False, timeout: int = 20) -> Dict[str, Any]:
@@ -57,6 +75,15 @@ def create_outbound_call(to_number: str, *, approved: bool = False, timeout: int
         raise TelnyxCallError("Call requires explicit approval")
 
     api_key = _env("TELNYX_API_KEY")
+    key_diag = _api_key_diagnostics(api_key)
+    if key_diag["has_bearer_prefix"]:
+        raise TelnyxCallError("TELNYX_API_KEY must contain only the API key; remove the 'Bearer ' prefix")
+    if key_diag["has_quotes"]:
+        raise TelnyxCallError("TELNYX_API_KEY contains quote characters; paste the raw API key only")
+    if key_diag["has_whitespace"]:
+        raise TelnyxCallError("TELNYX_API_KEY contains whitespace; paste the API key again without spaces or line breaks")
+    if not key_diag["starts_with_KEY"]:
+        raise TelnyxCallError("TELNYX_API_KEY has an unexpected format (expected it to start with KEY)")
     connection_id = _env("TELNYX_OUTBOUND_PROFILE_ID")
     from_number = normalize_e164(_env("TELNYX_FROM_NUMBER"))
     to_number = normalize_e164(to_number)
@@ -83,7 +110,8 @@ def create_outbound_call(to_number: str, *, approved: bool = False, timeout: int
 
     if not response.ok:
         detail = body.get("errors") if isinstance(body, dict) else None
-        raise TelnyxCallError(f"Telnyx rejected call ({response.status_code}): {detail or 'unknown error'}")
+        safe_diag = {k: v for k, v in key_diag.items() if k != 'present'}
+        raise TelnyxCallError(f"Telnyx rejected call ({response.status_code}): {detail or 'unknown error'}; API key diagnostics: {safe_diag}")
 
     data = body.get("data", {}) if isinstance(body, dict) else {}
     return {
