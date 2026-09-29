@@ -41,13 +41,13 @@ def _post(call_control_id: str, action: str, payload: Dict[str, Any] | None = No
     print(f"TELNYX_VOICE_ACTION success action={action} http={response.status_code}", flush=True)
     return body if isinstance(body, dict) else {"ok": True}
 
-def speak(call_control_id: str, text: str):
+def speak(call_control_id: str, text: str, voice=None, language=None):
     message = str(text or "").strip()
     if not message:
         print("TELNYX_VOICE_ACTION skipped action=speak reason=empty_message", flush=True)
         return {"ok": True, "skipped": True}
-    voice = str(os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")).strip() or "Polly.Brian"
-    language = str(os.getenv("TELNYX_TTS_LANGUAGE", "en-US")).strip() or "en-US"
+    voice = str(voice or os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")).strip() or "Polly.Brian"
+    language = str(language or os.getenv("TELNYX_TTS_LANGUAGE", "en-US")).strip() or "en-US"
     print(f"TELNYX_TTS_CONFIG voice={voice} language={language} chars={len(message)}", flush=True)
     use_ssml = str(os.getenv("TELNYX_TTS_SSML", "false")).strip().lower() == "true"
 
