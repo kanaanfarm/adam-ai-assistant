@@ -71,8 +71,8 @@ def speak(call_control_id: str, text: str):
         "language": language,
     })
 
-def start_transcription(call_control_id: str):
-    language = str(os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
+def start_transcription(call_control_id: str, language=None):
+    language = str(language or os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
     engine = str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google"
     # ADAM is the caller; the human on the called handset is the inbound/read track.
     # Fail safe to inbound so a missing Render variable cannot silently transcribe ADAM instead.

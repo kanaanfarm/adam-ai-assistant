@@ -9396,7 +9396,7 @@ def telnyx_voice_webhook_v1():
                 state["answered"] = True
 
             telnyx_live_speak(call_control_id, "Hello, this is ADAM. How can I help you?")
-            telnyx_live_start_transcription(call_control_id)
+            telnyx_live_start_transcription(call_control_id, language="auto_detect")
             return jsonify({"ok": True, "status": "live_voice_started"}), 200
 
         if event_type == "call.transcription" and call_control_id:
@@ -9446,8 +9446,9 @@ def telnyx_voice_webhook_v1():
                 if state.get("last_transcript") == key:
                     return jsonify({"ok": True, "status": "duplicate_transcript_ignored"}), 200
                 state["last_transcript"] = key
-            prompt = ("You are ADAM speaking on a live telephone call. Speak naturally like a professional human assistant. Keep replies concise, normally one or two sentences. Do not repeatedly ask how you can help after every response. If the caller says thank you or thanks, respond naturally and briefly without restarting the conversation. If the caller says good night, respond with a short natural farewell and do not ask another question. If the caller says goodbye, bye, that's all, or clearly indicates the conversation is finished, give a short polite farewell and do not ask how you can help again. Do not claim an external action was completed unless it really was. Caller said: " + transcript[:2500])
-            reply = str(call_ai(prompt, "English", max_tokens=180, timeout=20, reasoning_effort="low") or "").strip()
+            prompt = ("You are ADAM speaking on a live telephone call. Speak naturally like a professional human assistant. Keep replies concise, normally one or two sentences. If the caller speaks Arabic, reply in natural everyday Lebanese Arabic as spoken in Beirut, not Modern Standard Arabic, Gulf, Egyptian, or Syrian Arabic. Use normal Lebanese wording and rhythm without exaggeration. If the caller speaks English, reply in English. If the caller naturally mixes Lebanese Arabic and English, understand the complete meaning and respond naturally while preserving common English names and technical terms. Do not repeatedly ask how you can help after every response. If the caller says thank you or thanks, respond naturally and briefly without restarting the conversation. If the caller says good night, respond with a short natural farewell and do not ask another question. If the caller says goodbye, bye, that's all, or clearly indicates the conversation is finished, give a short polite farewell and do not ask how you can help again. Do not claim an external action was completed unless it really was. Caller said: " + transcript[:2500])
+            reply_language = "Lebanese Arabic" if any("\u0600" <= ch <= "\u06FF" for ch in transcript) else "English"
+            reply = str(call_ai(prompt, reply_language, max_tokens=180, timeout=20, reasoning_effort="low") or "").strip()
             telnyx_live_speak(call_control_id, reply or "I heard you. Please say that again.")
             return jsonify({"ok": True, "status": "live_voice_reply_sent"}), 200
 
