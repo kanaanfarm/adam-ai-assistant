@@ -9391,11 +9391,13 @@ def telnyx_voice_webhook_v1():
             with _TELNYX_LIVE_CALLS_LOCK_V3:
                 state = _TELNYX_LIVE_CALLS_V3.setdefault(call_control_id, {})
                 if state.get("answered"):
+
                     return jsonify({"ok": True, "status": "duplicate_answer_ignored"}), 200
                 state["answered"] = True
-            telnyx_live_start_transcription(call_control_id)
+
             telnyx_live_speak(call_control_id, "Hello, this is ADAM. How can I help you?")
             telnyx_live_start_transcription(call_control_id)
+            return jsonify({"ok": True, "status": "live_voice_started"}), 200
 
         if event_type == "call.transcription" and call_control_id:
             td = payload.get("transcription_data") or {}
