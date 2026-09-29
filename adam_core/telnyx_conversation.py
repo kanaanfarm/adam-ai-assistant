@@ -59,12 +59,13 @@ def speak(call_control_id: str, text: str):
 def start_transcription(call_control_id: str):
     language = str(os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
     engine = str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google"
-    track = str(os.getenv("TELNYX_STT_TRACK", "outbound")).strip().lower() or "outbound"
+    # ADAM is the caller; the human on the called handset is the inbound/read track.
+    # Fail safe to inbound so a missing Render variable cannot silently transcribe ADAM instead.
+    track = str(os.getenv("TELNYX_STT_TRACK", "inbound")).strip().lower() or "inbound"
     allowed_tracks = {"inbound", "outbound", "both"}
     if track not in allowed_tracks:
-        print(f"TELNYX_STT_CONFIG invalid_track={track} fallback=outbound", flush=True)
-        track = "outbound"
-    print(f"TELNYX_STT_CONFIG language={language} engine={engine} tracks={track} config=nested", flush=True)
+        print(f"TELNYX_STT_CONFIG invalid_track={track} fallback=inbound", flush=True)
+        track = "inbound"
     payload = {
         "transcription_engine": engine,
         "transcription_tracks": track,
@@ -76,6 +77,12 @@ def start_transcription(call_control_id: str):
             "transcription_engine": "Google",
             "language": language,
         }
+    # Safe diagnostic: this contains no API key, webhook token, phone number or call ID.
+    print(
+        f"TELNYX_STT_CONFIG language={language} engine={engine} tracks={track} "
+        f"request_payload={payload}",
+        flush=True,
+    )
     return _post(call_control_id, "transcription_start", payload)
 
 def stop_transcription(call_control_id: str):
