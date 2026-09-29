@@ -48,6 +48,11 @@ def require_owner_login():
         return "Owner password is not configured (minimum 20 characters).", 503
     if request.path == "/owner-login":
         return None
+
+    # Allow only Telnyx server-to-server endpoints past owner browser login.
+    # The webhook still validates TELNYX_WEBHOOK_TOKEN inside app.py.
+    if request.path in {"/api/telnyx/voice/webhook", "/api/telnyx/voice/readiness"}:
+        return None
     if hmac.compare_digest(str(session.get("owner_auth", "")), _password_fingerprint(password)):
         return None
     if request.method == "GET" and not request.path.startswith("/api/"):
