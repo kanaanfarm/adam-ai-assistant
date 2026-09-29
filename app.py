@@ -9446,8 +9446,7 @@ def telnyx_voice_webhook_v1():
                 if state.get("last_transcript") == key:
                     return jsonify({"ok": True, "status": "duplicate_transcript_ignored"}), 200
                 state["last_transcript"] = key
-            prompt = ("You are ADAM speaking on a live telephone call. Reply naturally and briefly, normally one or two sentences. "
-                      "Do not claim an external action was completed unless it really was. Caller said: " + transcript[:2500])
+            prompt = ("You are ADAM speaking on a live telephone call. Speak naturally like a professional human assistant. Keep replies concise, normally one or two sentences. Do not repeatedly ask how you can help after every response. If the caller says thank you or thanks, respond naturally and briefly without restarting the conversation. If the caller says good night, respond with a short natural farewell and do not ask another question. If the caller says goodbye, bye, that's all, or clearly indicates the conversation is finished, give a short polite farewell and do not ask how you can help again. Do not claim an external action was completed unless it really was. Caller said: " + transcript[:2500])
             reply = str(call_ai(prompt, "English", max_tokens=180, timeout=20, reasoning_effort="low") or "").strip()
             telnyx_live_speak(call_control_id, reply or "I heard you. Please say that again.")
             return jsonify({"ok": True, "status": "live_voice_reply_sent"}), 200
