@@ -49,9 +49,24 @@ def speak(call_control_id: str, text: str):
     voice = str(os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")).strip() or "Polly.Brian"
     language = str(os.getenv("TELNYX_TTS_LANGUAGE", "en-US")).strip() or "en-US"
     print(f"TELNYX_TTS_CONFIG voice={voice} language={language} chars={len(message)}", flush=True)
+    use_ssml = str(os.getenv("TELNYX_TTS_SSML", "false")).strip().lower() == "true"
+
+    if use_ssml:
+        safe_message = (
+            message[:2800]
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        payload = f'<speak><prosody volume="loud">{safe_message}</prosody></speak>'
+        payload_type = "ssml"
+    else:
+        payload = message[:3000]
+        payload_type = "text"
+
     return _post(call_control_id, "speak", {
-        "payload": message[:3000],
-        "payload_type": "text",
+        "payload": payload,
+        "payload_type": payload_type,
         "voice": voice,
         "language": language,
     })
