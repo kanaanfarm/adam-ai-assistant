@@ -182,6 +182,7 @@ from adam_core.stock_notification_policy import evaluate_notification as evaluat
 from adam_core.real_services_connection import build_status as build_real_services_status, self_test as real_services_connection_self_test
 from adam_core.calling_invitations import build_status as build_calling_invitations_status, prepare_invitation as prepare_calling_invitation, prepare_call as prepare_call_launch, self_test as calling_invitations_self_test
 from adam_core.telnyx_outbound import create_outbound_call as telnyx_create_outbound_call, readiness as telnyx_readiness, TelnyxCallError
+from adam_core.telnyx_conversation import speak as telnyx_live_speak, start_transcription as telnyx_live_start_transcription, webhook_token_valid as telnyx_webhook_token_valid
 from adam_core.cross_app_personal_operator import build_status as build_cross_app_personal_operator_status, prepare_workflow as prepare_cross_app_personal_workflow, execute_workflow as execute_cross_app_personal_workflow, self_test as cross_app_personal_operator_self_test
 from adam_core.production_reliability import build_status as build_production_reliability_status, self_test as production_reliability_self_test
 from adam_core.security_privacy_certification import build_status as build_security_privacy_certification_status, self_test as security_privacy_certification_self_test
@@ -9358,6 +9359,77 @@ def guest_voice_self_test_v810():
     }
     return jsonify({"version": VERSION, **result, **checks, "ok": result.get("ok") is True and all(checks.values())})
 
+
+
+
+# ADAM TELNYX ROUTES V3
+_TELNYX_LIVE_CALLS_V3 = {}
+_TELNYX_LIVE_CALLS_LOCK_V3 = threading.Lock()
+
+@app.post("/api/telnyx/voice/webhook")
+def telnyx_voice_webhook_v1():
+    if not telnyx_webhook_token_valid(request.args.get("token") or ""):
+        return jsonify({"ok": False, "status": "invalid_webhook_token"}), 401
+    body = request.get_json(silent=True) or {}
+    data = body.get("data") or {}
+    event_type = str(data.get("event_type") or "")
+    payload = data.get("payload") or {}
+    call_control_id = str(payload.get("call_control_id") or "").strip()
+    try:
+        if event_type == "call.answered" and call_control_id:
+            with _TELNYX_LIVE_CALLS_LOCK_V3:
+                state = _TELNYX_LIVE_CALLS_V3.setdefault(call_control_id, {})
+                if state.get("answered"):
+                    return jsonify({"ok": True, "status": "duplicate_answer_ignored"}), 200
+                state["answered"] = True
+            telnyx_live_start_transcription(call_control_id)
+            telnyx_live_speak(call_control_id, "Hello, this is ADAM. I can hear you now. Please speak after this message.")
+            return jsonify({"ok": True, "status": "live_voice_started"}), 200
+
+        if event_type == "call.transcription" and call_control_id:
+            td = payload.get("transcription_data") or {}
+            transcript = str(td.get("transcript") or payload.get("transcript") or "").strip()
+            is_final = td.get("is_final")
+            if is_final is None:
+                is_final = payload.get("is_final", True)
+            if not is_final or not transcript:
+                return jsonify({"ok": True, "status": "interim_ignored"}), 200
+            key = transcript.lower()
+            with _TELNYX_LIVE_CALLS_LOCK_V3:
+                state = _TELNYX_LIVE_CALLS_V3.setdefault(call_control_id, {})
+                if state.get("last_transcript") == key:
+                    return jsonify({"ok": True, "status": "duplicate_transcript_ignored"}), 200
+                state["last_transcript"] = key
+            prompt = ("You are ADAM speaking on a live telephone call. Reply naturally and briefly, normally one or two sentences. "
+                      "Do not claim an external action was completed unless it really was. Caller said: " + transcript[:2500])
+            reply = str(call_ai(prompt, "English", max_tokens=180, timeout=20, reasoning_effort="low") or "").strip()
+            telnyx_live_speak(call_control_id, reply or "I heard you. Please say that again.")
+            return jsonify({"ok": True, "status": "live_voice_reply_sent"}), 200
+
+        if event_type == "call.hangup" and call_control_id:
+            with _TELNYX_LIVE_CALLS_LOCK_V3:
+                _TELNYX_LIVE_CALLS_V3.pop(call_control_id, None)
+            return jsonify({"ok": True, "status": "call_closed"}), 200
+
+        return jsonify({"ok": True, "status": "event_acknowledged", "event_type": event_type}), 200
+    except Exception as exc:
+        try:
+            audit("TELNYX_LIVE_CALL_ERROR_V3", {"event_type": event_type, "error": str(exc)[:300]})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "status": "processing_error"}), 200
+
+@app.get("/api/telnyx/voice/readiness")
+def telnyx_voice_readiness_v1():
+    return jsonify({
+        "ok": True,
+        "two_way_voice_code_installed": True,
+        "webhook_token_configured": bool(str(os.getenv("TELNYX_WEBHOOK_TOKEN", "")).strip()),
+        "stt_language": str(os.getenv("TELNYX_STT_LANGUAGE", "en")),
+        "tts_language": str(os.getenv("TELNYX_TTS_LANGUAGE", "en-US")),
+        "tts_voice": str(os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")),
+        "version": VERSION,
+    })
 
 
 # ADAM TELNYX PUBLIC WEBHOOK AUTH BYPASS V2
