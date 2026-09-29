@@ -18,35 +18,51 @@ def _post(call_control_id: str, action: str, payload: Dict[str, Any] | None = No
     call_id = str(call_control_id or "").strip()
     if not call_id:
         raise TelnyxConversationError("Missing call_control_id")
-    response = requests.post(
-        f"{BASE_URL}/{call_id}/actions/{action}",
-        headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json", "Accept": "application/json"},
-        json=payload or {}, timeout=timeout,
-    )
+    safe_id = (call_id[:18] + "...") if len(call_id) > 18 else call_id
+    print(f"TELNYX_VOICE_ACTION start action={action} call={safe_id}", flush=True)
+    try:
+        response = requests.post(
+            f"{BASE_URL}/{call_id}/actions/{action}",
+            headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json", "Accept": "application/json"},
+            json=payload or {}, timeout=timeout,
+        )
+    except Exception as exc:
+        print(f"TELNYX_VOICE_ACTION transport_error action={action} error={type(exc).__name__}:{str(exc)[:300]}", flush=True)
+        raise
     try:
         body = response.json()
     except ValueError:
         body = {}
     if not response.ok:
         errors = body.get("errors") if isinstance(body, dict) else None
-        raise TelnyxConversationError(f"Telnyx {action} failed ({response.status_code}): {errors or response.text[:300]}")
+        detail = errors or response.text[:300]
+        print(f"TELNYX_VOICE_ACTION failed action={action} http={response.status_code} detail={str(detail)[:500]}", flush=True)
+        raise TelnyxConversationError(f"Telnyx {action} failed ({response.status_code}): {detail}")
+    print(f"TELNYX_VOICE_ACTION success action={action} http={response.status_code}", flush=True)
     return body if isinstance(body, dict) else {"ok": True}
 
 def speak(call_control_id: str, text: str):
     message = str(text or "").strip()
     if not message:
+        print("TELNYX_VOICE_ACTION skipped action=speak reason=empty_message", flush=True)
         return {"ok": True, "skipped": True}
+    voice = str(os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")).strip() or "Polly.Brian"
+    language = str(os.getenv("TELNYX_TTS_LANGUAGE", "en-US")).strip() or "en-US"
+    print(f"TELNYX_TTS_CONFIG voice={voice} language={language} chars={len(message)}", flush=True)
     return _post(call_control_id, "speak", {
         "payload": message[:3000],
         "payload_type": "text",
-        "voice": str(os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")).strip() or "Polly.Brian",
-        "language": str(os.getenv("TELNYX_TTS_LANGUAGE", "en-US")).strip() or "en-US",
+        "voice": voice,
+        "language": language,
     })
 
 def start_transcription(call_control_id: str):
+    language = str(os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
+    engine = str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google"
+    print(f"TELNYX_STT_CONFIG language={language} engine={engine} tracks=inbound", flush=True)
     return _post(call_control_id, "transcription_start", {
-        "language": str(os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en",
-        "transcription_engine": str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google",
+        "language": language,
+        "transcription_engine": engine,
         "transcription_tracks": "inbound",
     })
 
