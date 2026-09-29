@@ -9359,6 +9359,34 @@ def guest_voice_self_test_v810():
     return jsonify({"version": VERSION, **result, **checks, "ok": result.get("ok") is True and all(checks.values())})
 
 
+
+# ADAM TELNYX PUBLIC WEBHOOK AUTH BYPASS V2
+_TELNYX_PUBLIC_ENDPOINTS_V2 = frozenset({"telnyx_voice_webhook_v1", "telnyx_voice_readiness_v1"})
+
+def _install_telnyx_public_auth_bypass_v2():
+    guards = list(app.before_request_funcs.get(None, []))
+    if not guards:
+        return 0
+    wrapped = []
+    for guard in guards:
+        if getattr(guard, "_adam_telnyx_bypass_v2", False):
+            wrapped.append(guard)
+            continue
+        def make_wrapper(original):
+            def wrapper(*args, **kwargs):
+                if request.endpoint in _TELNYX_PUBLIC_ENDPOINTS_V2:
+                    return None
+                return original(*args, **kwargs)
+            wrapper.__name__ = getattr(original, "__name__", "before_request_guard") + "_telnyx_v2"
+            wrapper._adam_telnyx_bypass_v2 = True
+            return wrapper
+        wrapped.append(make_wrapper(guard))
+    app.before_request_funcs[None] = wrapped
+    return len(wrapped)
+
+_TELNYX_AUTH_GUARDS_WRAPPED_V2 = _install_telnyx_public_auth_bypass_v2()
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print(f"{APP_NAME} {VERSION}")
