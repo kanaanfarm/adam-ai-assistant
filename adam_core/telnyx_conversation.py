@@ -59,11 +59,16 @@ def speak(call_control_id: str, text: str):
 def start_transcription(call_control_id: str):
     language = str(os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
     engine = str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google"
-    print(f"TELNYX_STT_CONFIG language={language} engine={engine} tracks=inbound", flush=True)
+    track = str(os.getenv("TELNYX_STT_TRACK", "inbound")).strip().lower() or "inbound"
+    allowed_tracks = {"inbound", "outbound", "both"}
+    if track not in allowed_tracks:
+        print(f"TELNYX_STT_CONFIG invalid_track={track} fallback=inbound", flush=True)
+        track = "inbound"
+    print(f"TELNYX_STT_CONFIG language={language} engine={engine} tracks={track}", flush=True)
     return _post(call_control_id, "transcription_start", {
         "language": language,
         "transcription_engine": engine,
-        "transcription_tracks": "inbound",
+        "transcription_tracks": track,
     })
 
 def stop_transcription(call_control_id: str):
