@@ -9403,8 +9403,41 @@ def telnyx_voice_webhook_v1():
             is_final = td.get("is_final")
             if is_final is None:
                 is_final = payload.get("is_final", True)
-            if not is_final or not transcript:
+            if not is_final:
                 return jsonify({"ok": True, "status": "interim_ignored"}), 200
+
+            try:
+                confidence = float(td.get("confidence", 0) or 0)
+            except (TypeError, ValueError):
+                confidence = 0.0
+
+            print(
+                f"TELNYX_TRANSCRIPT confidence={confidence:.3f} "
+                f"text={transcript[:120]!r}",
+                flush=True,
+            )
+
+            if not transcript:
+                telnyx_live_speak(
+                    call_control_id,
+                    "Sorry, I didn't hear that clearly. Please repeat."
+                )
+                return jsonify({
+                    "ok": True,
+                    "status": "empty_transcript_repeat_requested"
+                }), 200
+
+            if confidence > 0 and confidence < 0.55:
+                telnyx_live_speak(
+                    call_control_id,
+                    "Sorry, I didn't understand that clearly. Please repeat."
+                )
+                return jsonify({
+                    "ok": True,
+                    "status": "low_confidence_repeat_requested",
+                    "confidence": confidence
+                }), 200
+
             key = transcript.lower()
             with _TELNYX_LIVE_CALLS_LOCK_V3:
                 state = _TELNYX_LIVE_CALLS_V3.setdefault(call_control_id, {})
