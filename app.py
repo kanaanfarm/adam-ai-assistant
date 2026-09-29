@@ -9386,6 +9386,12 @@ def telnyx_voice_webhook_v1():
         f"is_final={td_debug.get('is_final', payload.get('is_final', 'n/a'))}",
         flush=True,
     )
+    if event_type == "call.speak.failed":
+        print(
+            f"TELNYX_SPEAK_FAILED_DETAILS payload={repr(payload)}",
+            flush=True,
+        )
+
     try:
         if event_type == "call.answered" and call_control_id:
             with _TELNYX_LIVE_CALLS_LOCK_V3:
