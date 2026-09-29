@@ -77,6 +77,12 @@ def start_transcription(call_control_id: str):
             "transcription_engine": "Google",
             "language": language,
         }
+    elif engine.lower() == "telnyx":
+        payload["transcription_engine_config"] = {
+            "transcription_engine": "Telnyx",
+            "language": language,
+        }
+
     # Safe diagnostic: this contains no API key, webhook token, phone number or call ID.
     print(
         f"TELNYX_STT_CONFIG language={language} engine={engine} tracks={track} "
