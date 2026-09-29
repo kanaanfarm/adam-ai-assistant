@@ -41,7 +41,7 @@ def _post(call_control_id: str, action: str, payload: Dict[str, Any] | None = No
     print(f"TELNYX_VOICE_ACTION success action={action} http={response.status_code}", flush=True)
     return body if isinstance(body, dict) else {"ok": True}
 
-def speak(call_control_id: str, text: str, voice=None, language=None):
+def speak(call_control_id: str, text: str, voice=None, language=None, service_level=None):
     message = str(text or "").strip()
     if not message:
         print("TELNYX_VOICE_ACTION skipped action=speak reason=empty_message", flush=True)
@@ -64,12 +64,16 @@ def speak(call_control_id: str, text: str, voice=None, language=None):
         payload = message[:3000]
         payload_type = "text"
 
-    return _post(call_control_id, "speak", {
+    speak_request = {
         "payload": payload,
         "payload_type": payload_type,
         "voice": voice,
         "language": language,
-    })
+    }
+    if service_level:
+        speak_request["service_level"] = service_level
+
+    return _post(call_control_id, "speak", speak_request)
 
 def start_transcription(call_control_id: str, language=None):
     language = str(language or os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
