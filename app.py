@@ -9394,8 +9394,8 @@ def telnyx_voice_webhook_v1():
                     return jsonify({"ok": True, "status": "duplicate_answer_ignored"}), 200
                 state["answered"] = True
             telnyx_live_start_transcription(call_control_id)
-            telnyx_live_speak(call_control_id, "Hello, this is ADAM. I can hear you now. Please speak after this message.")
-            return jsonify({"ok": True, "status": "live_voice_started"}), 200
+            telnyx_live_speak(call_control_id, "Hello, this is ADAM. How can I help you?")
+            telnyx_live_start_transcription(call_control_id)
 
         if event_type == "call.transcription" and call_control_id:
             td = payload.get("transcription_data") or {}
