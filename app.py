@@ -9396,7 +9396,7 @@ def telnyx_voice_webhook_v1():
                 state["answered"] = True
 
             telnyx_live_speak(call_control_id, "Hello, this is ADAM. How can I help you?")
-            telnyx_live_start_transcription(call_control_id)
+            telnyx_live_start_transcription(call_control_id, language="ar")
             return jsonify({"ok": True, "status": "live_voice_started"}), 200
 
         if event_type == "call.transcription" and call_control_id:
