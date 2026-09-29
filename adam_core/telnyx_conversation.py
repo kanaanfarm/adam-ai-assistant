@@ -59,17 +59,24 @@ def speak(call_control_id: str, text: str):
 def start_transcription(call_control_id: str):
     language = str(os.getenv("TELNYX_STT_LANGUAGE", "en")).strip() or "en"
     engine = str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google"
-    track = str(os.getenv("TELNYX_STT_TRACK", "inbound")).strip().lower() or "inbound"
+    track = str(os.getenv("TELNYX_STT_TRACK", "outbound")).strip().lower() or "outbound"
     allowed_tracks = {"inbound", "outbound", "both"}
     if track not in allowed_tracks:
-        print(f"TELNYX_STT_CONFIG invalid_track={track} fallback=inbound", flush=True)
-        track = "inbound"
-    print(f"TELNYX_STT_CONFIG language={language} engine={engine} tracks={track}", flush=True)
-    return _post(call_control_id, "transcription_start", {
-        "language": language,
+        print(f"TELNYX_STT_CONFIG invalid_track={track} fallback=outbound", flush=True)
+        track = "outbound"
+    print(f"TELNYX_STT_CONFIG language={language} engine={engine} tracks={track} config=nested", flush=True)
+    payload = {
         "transcription_engine": engine,
         "transcription_tracks": track,
-    })
+    }
+    # Telnyx Voice API expects recognition language inside the engine config,
+    # not as a top-level transcription_start field.
+    if engine.lower() == "google":
+        payload["transcription_engine_config"] = {
+            "transcription_engine": "Google",
+            "language": language,
+        }
+    return _post(call_control_id, "transcription_start", payload)
 
 def stop_transcription(call_control_id: str):
     return _post(call_control_id, "transcription_stop", {})
