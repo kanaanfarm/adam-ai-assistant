@@ -9375,6 +9375,17 @@ def telnyx_voice_webhook_v1():
     event_type = str(data.get("event_type") or "")
     payload = data.get("payload") or {}
     call_control_id = str(payload.get("call_control_id") or "").strip()
+    # TELNYX V5 diagnostics: log event metadata only; never log webhook token.
+    td_debug = payload.get("transcription_data") or {}
+    transcript_debug = str(td_debug.get("transcript") or payload.get("transcript") or "").strip()
+    print(
+        f"TELNYX_WEBHOOK_EVENT event={event_type or 'unknown'} "
+        f"call_present={bool(call_control_id)} "
+        f"transcription_data_present={bool(td_debug)} "
+        f"transcript_chars={len(transcript_debug)} "
+        f"is_final={td_debug.get('is_final', payload.get('is_final', 'n/a'))}",
+        flush=True,
+    )
     try:
         if event_type == "call.answered" and call_control_id:
             with _TELNYX_LIVE_CALLS_LOCK_V3:
@@ -9426,6 +9437,8 @@ def telnyx_voice_readiness_v1():
         "two_way_voice_code_installed": True,
         "webhook_token_configured": bool(str(os.getenv("TELNYX_WEBHOOK_TOKEN", "")).strip()),
         "stt_language": str(os.getenv("TELNYX_STT_LANGUAGE", "en")),
+        "stt_track": str(os.getenv("TELNYX_STT_TRACK", "inbound")).strip().lower() or "inbound",
+        "stt_engine": str(os.getenv("TELNYX_STT_ENGINE", "Google")).strip() or "Google",
         "tts_language": str(os.getenv("TELNYX_TTS_LANGUAGE", "en-US")),
         "tts_voice": str(os.getenv("TELNYX_TTS_VOICE", "Polly.Brian")),
         "version": VERSION,
