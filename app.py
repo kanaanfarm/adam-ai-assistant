@@ -6841,7 +6841,7 @@ def telnyx_call_api():
     if body.get("approved") is not True:
         return jsonify({"ok": False, "error": "Owner approval is required."}), 400
     try:
-        result = telnyx_create_outbound_call(str(body.get("phone") or ""), approved=True)
+        return jsonify({"ok": False, "status": "calling_disabled", "error": "Telephone calling is disabled in Adam Assistant."}), 403
         return jsonify(result)
     except TelnyxCallError as exc:
         return jsonify({"ok": False, "error": str(exc), "diagnostics": telnyx_readiness()}), 400
